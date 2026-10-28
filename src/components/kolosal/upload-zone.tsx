@@ -23,9 +23,15 @@ interface UploadZoneProps {
   onUploaded: (info: UploadResult, objectUrl: string) => void;
   onCleared: () => void;
   onError: (msg: string) => void;
+  /**
+   * stage = untuk area pratinjau besar (dropzone saat kosong, hilang saat terisi)
+   * card  = untuk panel kanan (kartu info video saat terisi, hilang saat kosong)
+   * kosong = perilaku lama (dropzone/kartu di tempat yang sama)
+   */
+  variant?: "stage" | "card";
 }
 
-export function UploadZone({ uploaded, onUploaded, onCleared, onError }: UploadZoneProps) {
+export function UploadZone({ uploaded, onUploaded, onCleared, onError, variant }: UploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -71,6 +77,7 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError }: UploadZ
   );
 
   if (uploaded) {
+    if (variant === "stage") return null;
     return (
       <div className="glass rounded-xl p-4 relative flex flex-col gap-3">
         <HudCorners />
@@ -118,6 +125,8 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError }: UploadZ
       </div>
     );
   }
+
+  if (variant === "card") return null;
 
   return (
     <div

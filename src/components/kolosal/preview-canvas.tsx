@@ -13,10 +13,7 @@ import {
   fmtDur,
 } from "@/lib/video-config";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Film } from "lucide-react";
-import { HudCorners } from "@/components/kolosal/hud";
+import { Film, Play, Pause, SkipBack, SkipForward, Image as ImageIcon } from "lucide-react";
 
 const CW = 540; // lebar kanvas internal
 const CH = 960; // tinggi kanvas internal
@@ -42,6 +39,8 @@ interface PreviewCanvasProps {
   partNum: number;
   onPartNumChange: (n: number) => void;
   seekReq: { t: number; k: number } | null;
+  /** laporkan posisi putar ke luar (untuk playhead timeline) */
+  onTimeChange?: (t: number) => void;
 }
 
 export function PreviewCanvas({
@@ -54,6 +53,7 @@ export function PreviewCanvas({
   partNum,
   onPartNumChange,
   seekReq,
+  onTimeChange,
 }: PreviewCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -64,7 +64,15 @@ export function PreviewCanvas({
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
 
-  // respons permintaan seek dari luar (chip bagian)
+  const reportTime = useCallback(
+    (t: number) => {
+      setTime(t);
+      onTimeChange?.(t);
+    },
+    [onTimeChange]
+  );
+
+  // respons permintaan seek dari luar (chip bagian / timeline)
   useEffect(() => {
     if (seekReq && videoRef.current) {
       videoRef.current.currentTime = Math.min(seekReq.t, Math.max(0, duration - 0.1));
@@ -308,115 +316,156 @@ export function PreviewCanvas({
     setCursor("default");
   };
 
-  // ---- scrubber ----
-  const onSeek = (t: number) => {
-    if (videoRef.current) videoRef.current.currentTime = t;
-    setTime(t);
-  };
-
+  // ---- pemutar & navigasi bagian ----
   const segs = duration > 0 ? computeSegments(duration, settings) : [];
 
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play();
+    else v.pause();
+  };
+
+  const seekTo = (t: number) => {
+    const clamped = Math.max(0, Math.min(t, Math.max(0, duration - 0.05)));
+    if (videoRef.current) videoRef.current.currentTime = clamped;
+    reportTime(clamped);
+  };
+
+  const gotoPart = (n: number) => {
+    if (segs.length === 0) return;
+    const next = Math.min(Math.max(n, 1), segs.length);
+    const changed = next !== partNum;
+    onPartNumChange(next);
+    if (coverPreview && changed) {
+      // efek coverPreview akan menangani seek otomatis (partNum ada di dependensinya)
+      return;
+    }
+    seekTo(segs[next - 1].start + 0.05);
+  };
+
+  const iconBtn =
+    "h-8 w-8 p-0 rounded-lg border border-cyan-300/25 bg-slate-950/60 text-zinc-300 hover:bg-cyan-400/10 hover:text-cyan-200 hover:border-cyan-300/60 disabled:opacity-40 transition-colors";
+
   return (
-    <div className="flex flex-col items-center gap-3 w-full">
-      <div className="w-full max-w-[340px] sm:max-w-[380px] flex flex-col">
-        {/* label monitor */}
-        <div className="flex items-center justify-between font-tech text-[10px] tracking-[0.22em] px-0.5 pb-1.5">
-          <span className="flex items-center gap-1.5 text-cyan-300/90">
-            <span className="led w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" aria-hidden />
-            LIVE PREVIEW
-          </span>
-          <span className="text-zinc-500">MONITOR // 01</span>
-        </div>
-        <div
-          className="relative rounded-xl overflow-hidden border border-cyan-300/25 bg-black shadow-[0_0_34px_-8px_rgba(34,211,238,0.45),0_24px_48px_-24px_rgba(2,8,23,0.9)]"
-        >
-          <HudCorners />
-          <canvas
-            ref={canvasRef}
-            width={CW}
-            height={CH}
-            className="w-full aspect-[9/16] touch-none select-none"
-            style={{ cursor }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerLeave={onPointerUp}
-            aria-label="Pratinjau video 9:16"
-          />
-          {!videoUrl && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <Film className="w-10 h-10 text-cyan-200/25" aria-hidden />
-            </div>
-          )}
-        </div>
+    <div className="flex flex-col h-full w-full min-h-0">
+      {/* label monitor */}
+      <div className="shrink-0 flex items-center justify-between font-tech text-[10px] tracking-[0.22em] px-3.5 pt-2.5 pb-1.5">
+        <span className="flex items-center gap-1.5 text-cyan-300/90">
+          <span className="led w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" aria-hidden />
+          {playing ? "PLAYING" : "LIVE PREVIEW"}
+        </span>
+        <span className="text-zinc-500">MONITOR // 01</span>
       </div>
 
-      {/* kontrol bawah */}
-      <div className="w-full max-w-[380px] flex flex-col gap-2">
+      {/* area kanvas — memenuhi tinggi stage, rasio 9:16 terjaga */}
+      <div className="relative flex-1 min-h-0 w-full flex items-center justify-center px-3">
+        <canvas
+          ref={canvasRef}
+          width={CW}
+          height={CH}
+          className="block max-h-full max-w-full w-auto h-auto rounded-lg border border-cyan-300/25 bg-black shadow-[0_0_34px_-8px_rgba(34,211,238,0.45),0_24px_48px_-24px_rgba(2,8,23,0.9)] touch-none select-none"
+          style={{ cursor }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+          aria-label="Pratinjau video 9:16"
+        />
+        {!videoUrl && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <Film className="w-10 h-10 text-cyan-200/25" aria-hidden />
+          </div>
+        )}
+      </div>
+
+      {/* ---- player bar ala monitor referensi ---- */}
+      <div className="shrink-0 border-t border-cyan-300/12 bg-slate-950/55 backdrop-blur px-3 py-2 flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] tabular-nums text-zinc-400 w-9">{fmtDur(time)}</span>
+          <span className="font-tech text-[11px] tabular-nums text-cyan-200/90 w-10">
+            {fmtDur(time)}
+          </span>
           <input
             type="range"
             min={0}
             max={Math.max(0.1, duration)}
             step={0.05}
             value={Math.min(time, duration || 0)}
-            onChange={(e) => onSeek(Number(e.target.value))}
+            onChange={(e) => seekTo(Number(e.target.value))}
             disabled={!videoUrl}
             className="kolosal-range flex-1"
             aria-label="Geser posisi video"
           />
-          <span className="text-[11px] tabular-nums text-zinc-400 w-9 text-right">
+          <span className="font-tech text-[11px] tabular-nums text-zinc-400 w-10 text-right">
             {fmtDur(duration)}
           </span>
         </div>
 
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Switch
-              id="cover-preview"
-              checked={coverPreview}
-              onCheckedChange={onCoverPreviewChange}
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={segs.length === 0}
+            className={iconBtn}
+            aria-label="Bagian sebelumnya"
+            onClick={() => gotoPart(partNum - 1)}
+          >
+            <SkipBack className="w-4 h-4" aria-hidden />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!videoUrl}
+            onClick={togglePlay}
+            aria-label={playing ? "Jeda" : "Putar"}
+            className="h-8 w-8 p-0 rounded-lg bg-cyan-400 text-slate-950 hover:bg-cyan-300 shadow-[0_0_16px_rgba(34,211,238,0.45)] border-0"
+          >
+            {playing ? (
+              <Pause className="w-4 h-4" aria-hidden />
+            ) : (
+              <Play className="w-4 h-4" aria-hidden />
+            )}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={segs.length === 0}
+            className={iconBtn}
+            aria-label="Bagian berikutnya"
+            onClick={() => gotoPart(partNum + 1)}
+          >
+            <SkipForward className="w-4 h-4" aria-hidden />
+          </Button>
+
+          <span className="font-tech text-[10px] tracking-wider text-zinc-400 ml-1 whitespace-nowrap">
+            BAGIAN {partNum}
+            {segs.length > 0 && ` / ${segs.length}`}
+          </span>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <p className="hidden xl:block text-[10px] text-zinc-500 leading-tight max-w-[230px] text-right">
+              Klik &amp; geser teks langsung di pratinjau — bebas semua arah.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
               disabled={!videoUrl}
-            />
-            <Label htmlFor="cover-preview" className="text-xs text-zinc-300 cursor-pointer">
-              Pratinjau cover
-            </Label>
+              aria-pressed={coverPreview}
+              onClick={() => onCoverPreviewChange(!coverPreview)}
+              className={`h-8 px-2.5 rounded-lg font-tech text-[10px] tracking-wider border transition-colors ${
+                coverPreview
+                  ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-200 shadow-[0_0_14px_-3px_rgba(34,211,238,0.7)]"
+                  : "border-cyan-300/25 bg-slate-950/60 text-zinc-300 hover:bg-cyan-400/10 hover:text-cyan-200"
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5 mr-1" aria-hidden />
+              COVER
+            </Button>
           </div>
-          <span className="text-[11px] text-zinc-500">Bagian {partNum}</span>
         </div>
-
-        {segs.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 max-h-[72px] overflow-y-auto kolosal-scroll pr-1">
-            {segs.map((_, i) => (
-              <Button
-                key={i}
-                size="sm"
-                variant={partNum === i + 1 ? "default" : "outline"}
-                className="h-7 px-2.5 text-[11px] rounded-full"
-                onClick={() => {
-                  onPartNumChange(i + 1);
-                  if (coverPreview) {
-                    // efek coverPreview akan menangani seek
-                    onCoverPreviewChange(false);
-                    setTimeout(() => onCoverPreviewChange(true), 0);
-                  } else {
-                    if (videoRef.current)
-                      videoRef.current.currentTime = Math.max(0, segs[i].start + 0.05);
-                  }
-                }}
-              >
-                {i + 1}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        <p className="text-[11px] text-zinc-500 leading-snug">
-          Tips: <span className="text-zinc-300">klik & geser teks langsung di pratinjau</span> —
-          bebas ke atas, bawah, kiri, dan kanan. Atur posisi juga lewat pad geser di panel
-          pengaturan.
-        </p>
       </div>
 
       <video
@@ -426,23 +475,10 @@ export function PreviewCanvas({
         muted
         playsInline
         preload="auto"
-        onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
+        onTimeUpdate={(e) => reportTime(e.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
       />
-      {/* kontrol play/pos via tombol kecil */}
-      <button
-        className="sr-only"
-        onClick={() => {
-          const v = videoRef.current;
-          if (!v) return;
-          if (v.paused) void v.play();
-          else v.pause();
-        }}
-        aria-hidden
-        tabIndex={-1}
-      />
-      <span className="sr-only">{playing ? "memutar" : "berhenti"}</span>
     </div>
   );
 }

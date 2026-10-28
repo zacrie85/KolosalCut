@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Settings, LabelFormat, FRAME_PRESETS, QUALITY_INFO, QualityKey, TextElement } from "@/lib/video-config";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +32,8 @@ import {
   ChevronRight,
   RotateCcw,
 } from "lucide-react";
+
+type SettingsTab = "video" | "teks" | "gaya";
 
 interface SettingsPanelProps {
   settings: Settings;
@@ -271,9 +273,44 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
 
   const disabled = !hasVideo;
   const presetObj = FRAME_PRESETS.find((p) => p.key === s.preset);
+  const [tab, setTab] = useState<SettingsTab>("video");
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
+      {/* ===== TAB PILIHAN — ala panel referensi (Video / Animation / Tracking) ===== */}
+      <div
+        role="tablist"
+        aria-label="Kelompok pengaturan"
+        className="shrink-0 grid grid-cols-3 gap-1 rounded-xl border border-cyan-300/20 bg-slate-950/60 p-1"
+      >
+        {(
+          [
+            { key: "video", label: "Video", icon: <Scissors className="w-3.5 h-3.5" /> },
+            { key: "teks", label: "Teks", icon: <Type className="w-3.5 h-3.5" /> },
+            { key: "gaya", label: "Gaya", icon: <Palette className="w-3.5 h-3.5" /> },
+          ] as Array<{ key: SettingsTab; label: string; icon: React.ReactNode }>
+        ).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={`h-8 rounded-lg font-display text-[10px] font-bold tracking-[0.14em] uppercase flex items-center justify-center gap-1.5 transition-all ${
+              tab === t.key
+                ? "bg-gradient-to-r from-cyan-500/85 to-indigo-500/85 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.4)]"
+                : "text-zinc-400 hover:text-cyan-200 hover:bg-cyan-400/5"
+            }`}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto kolosal-scroll lg:pr-1 flex flex-col gap-3 pb-1">
+      {tab === "video" && (
+      <>
       {/* ===== PEMOTONGAN ===== */}
       <Section num="01" icon={<Scissors className="w-4 h-4" />} title="Pemotongan Video">
         <div className="flex gap-1.5">
@@ -438,6 +475,15 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
           </>
         )}
       </Section>
+      </>
+      )}
+
+      {tab === "teks" && (
+      <>
+        <p className="text-[11px] text-cyan-100/60 leading-snug rounded-lg border border-cyan-300/15 bg-cyan-400/5 px-3 py-2">
+          Tips: posisi tiap teks bisa digeser langsung dengan menyeretnya di pratinjau, atau pakai
+          pad mini & tombol panah di bawah tiap teks.
+        </p>
 
       {/* ===== JUDUL ===== */}
       <Section num="03" icon={<Type className="w-4 h-4" />} title="Judul Video (dari nama file)">
@@ -564,6 +610,11 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
           <span className="text-[11px] text-zinc-500 tabular-nums w-6">{s.desc.size}</span>
         </div>
       </Section>
+      </>
+      )}
+
+      {tab === "gaya" && (
+      <>
 
       {/* ===== GAYA FILM ===== */}
       <Section num="06" icon={<Palette className="w-4 h-4" />} title="Gaya Frame Film">
@@ -662,6 +713,11 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
             : "9:16 Biasa: video utuh di tengah dengan latar blur; perbesar dengan zoom."}
         </p>
       </Section>
+      </>
+      )}
+
+      {tab === "video" && (
+      <>
 
       {/* ===== KUALITAS ===== */}
       <Section num="08" icon={<Gauge className="w-4 h-4" />} title="Kualitas Render">
@@ -681,6 +737,9 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
         </div>
         <p className="text-[11px] text-zinc-500">{presetObj ? "" : ""}{QUALITY_INFO[s.quality].desc}</p>
       </Section>
+      </>
+      )}
+      </div>
     </div>
   );
 }

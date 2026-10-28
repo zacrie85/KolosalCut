@@ -279,6 +279,15 @@
 }
 
 /* ===== scrollbar cyan ===== */
+/* tinggi konten editor app-like: header 4rem + footer 3rem */
+@media (min-width: 1024px) {
+  .app-editor-h {
+    flex: 0 0 auto;
+    height: calc(100vh - 7rem);
+    min-height: 0;
+  }
+}
+
 .kolosal-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;

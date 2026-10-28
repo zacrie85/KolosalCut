@@ -57,3 +57,22 @@ Work Log:
 
 Stage Summary:
 - Tampilan kini bertema "Neon Video Engine": panel kaca + HUD cyan/violet, tanpa perubahan logika fungsional apa pun (render, geser, split semua tetap sama)
+
+---
+Task ID: 4
+Agent: main (Z.ai)
+Task: Restrukturisasi layout KolosalCut mengikuti gambar referensi editor video (stage pratinjau besar + panel tab kanan + timeline bawah)
+
+Work Log:
+- Komponen BARU timeline.tsx: ruler waktu adaptif (00:00:00 dst), klip part proporsional durasi (klik = pilih bagian + seek), playhead cyan realtime, gelombang audio SVG ungu (deterministik + pembulatan anti-mismatch hidrasi), strip info ala label "Effect:" di referensi (GAYA / jumlah bagian / durasi / audio / caption)
+- preview-canvas.tsx: canvas kini mengisi tinggi stage (flex item, rasio 9:16 terjaga), player bar ala referensi (waktu, scrubber, tombol prev/play/next part, indikator BAGIAN n/m, toggle COVER), label PLAYING saat memutar; hapus chip part & switch lama (pindah ke timeline/player bar)
+- settings-panel.tsx: 8 seksi dibagi 3 tab ala referensi (Video: pemotongan+cover+kualitas; Teks: judul+label+deskripsi+tips; Gaya: frame film+rasio/zoom), tab pill gradien cyan-indigo
+- upload-zone.tsx: prop variant "stage" (dropzone area pratinjau) / "card" (kartu sumber video di panel kanan)
+- page.tsx: layout app-editor — kolom kiri (stage glass + timeline), kolom kanan (panel glass: sumber video, tab, CTA render menempel di dasar, panel hasil), dropzone besar di tengah stage saat kosong
+- globals.css: utilitas .app-editor-h (tinggi app-like = 100vh - 7rem pada lg) — mengatasi arbitrary calc Tailwind yang tidak tergenerate
+- Perbaikan bug: mismatch hidrasi float waveform (pembulatan 3 desimal); rantai tinggi canvas (canvas jadi flex item langsung); calc Tailwind invalid (ganti class CSS khusus); dev server di-restart bersih (rm .next)
+- Verifikasi browser end-to-end: layout desktop 1500px sesuai referensi (semua muat 1 layar, tanpa scroll), timeline 4 klip klik-P2 → BAGIAN 2/4 + seek 8.05s + playhead tepat, play/pause (label PLAYING + tombol Jeda), tab Teks/Gaya tampil benar, drag teks di canvas tetap akurat, toggle COVER (aria-pressed + seek frame cover), mobile 390px tersusun rapi, render FFmpeg 4 bagian selesai sukses (4 thumbnail + tombol unduh, tanpa error)
+- Lint bersih (0 error), artefak uji dibersihkan
+
+Stage Summary:
+- Layout kini meniru struktur referensi: pratinjau besar kiri-tengah + kontrol player, panel kontrol bertab di kanan (Video/Teks/Gaya), timeline part di bawah dengan ruler/klip/waveform/playhead; seluruh fungsi lama (geser teks bebas, split, cover, preset, render) tetap utuh
