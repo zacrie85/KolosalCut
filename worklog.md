@@ -76,3 +76,28 @@ Work Log:
 
 Stage Summary:
 - Layout kini meniru struktur referensi: pratinjau besar kiri-tengah + kontrol player, panel kontrol bertab di kanan (Video/Teks/Gaya), timeline part di bawah dengan ruler/klip/waveform/playhead; seluruh fungsi lama (geser teks bebas, split, cover, preset, render) tetap utuh
+
+---
+Task ID: 3
+Agent: main (Z.ai)
+Task: Jadikan KolosalCut aplikasi desktop yang bisa di-install di Windows + rilis ke GitHub akun user (zacrie85)
+
+Work Log:
+- Verifikasi token GitHub user (scope repo+workflow, login zacrie85), buat repo "zacrie85/KolosalCut" via API
+- Adaptasi src/lib/server/ffmpeg.ts untuk desktop: env override FFMPEG_PATH/FFPROBE_PATH/FFMPEG_FONT/KOLOSAL_DATA_DIR + escFilterPath() untuk path filter Windows (C:\...)
+- Tambah electron/main.js: spawn server Next.js standalone via ELECTRON_RUN_AS_NODE, port bebas dinamis, dialog unduhan (will-download), single-instance, log ke userData
+- scripts/post-build.mjs (copy static+public cross-platform, pengganti cp -r), scripts/make_icon.py (ikon ico/png film-strip+play)
+- electron-builder.yml: target NSIS installer + portable x64, extraResources (bin ffmpeg, fonts, icon, .next/standalone)
+- package.json: name kolosalcut v1.0.0, main electron/main.js, devDeps electron 45 + electron-builder 26, scripts dist:win; bun lockfile disinkronkan
+- .github/workflows/build-windows.yml (windows-latest, bun, FFmpeg BtbN win64, next build, electron-builder, artifact + release via softprops pada tag v*), README.md + RELEASE_NOTES.md (Indonesia)
+- .gitignore diperbersihkan (release/, resources/bin/, upload/, mockup lama di-untrack); verifikasi tidak ada token di file apapun
+- Smoke test lokal: build standalone OK, server 200 (homepage+static), render e2e 1 job (cover+judul+label+desc) sukses frame 1080x1920, lint bersih
+- Push main -> CI run 1 sukses; tag v1.0.0 -> CI gagal (flaky Google Fonts Turbopack) -> rerun-failed-jobs sukses
+- Hapus 1 release draft duplikat hasil electron-builder publish
+
+Stage Summary:
+- Release publik aktif: https://github.com/zacrie85/KolosalCut/releases/tag/v1.0.0
+  - KolosalCut-Setup-1.0.0.exe (430.2 MB, installer NSIS)
+  - KolosalCut-Portable-1.0.0.exe (363.1 MB, tanpa install)
+- Web preview sandbox tetap berfungsi (default data dir tmpdir)
+- PERLU DIINGATKAN KE USER: revoke/rotate token GitHub yang dibagikan di chat
