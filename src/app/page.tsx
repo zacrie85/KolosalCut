@@ -183,6 +183,15 @@ export default function Home() {
     }
   }, [toast]);
 
+  // pompa antrean unggah SETELAH daftar ter-commit.
+  // FIX race: dulu flushUploads dipanggil langsung dari addFiles, saat itemsRef
+  // masih berisi daftar lama, sehingga unggahan batch tidak pernah dimulai
+  // (status mentok MENGUNGGAH 0%). Dengan efek ini, setiap item "mengunggah"
+  // dijamin diambil begitu daftar berubah — termasuk unggahan yang sempat nyangkut.
+  useEffect(() => {
+    void flushUploads();
+  }, [items, flushUploads]);
+
   const addFiles = useCallback(
     (files: File[]) => {
       const slot = MAX_VIDEOS - itemsRef.current.length;
@@ -225,7 +234,7 @@ export default function Home() {
       if (added.length === 0) return;
       setItems((prev) => [...prev, ...added]);
       if (!selectedRef.current) setSelectedUid(added[0].uid);
-      void flushUploads();
+      // pompa unggahan kini lewat efek [items] di atas — tidak dipanggil langsung di sini
       toast({
         title: "Video ditambahkan",
         description: `${added.length} video masuk antrean & sedang diunggah.`,

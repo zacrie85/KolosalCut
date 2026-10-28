@@ -1,3 +1,31 @@
+# KolosalCut v1.3.1
+
+Perbaikan penting: **impor "PILIH BEBERAPA VIDEO SEKALIGUS" kini benar-benar mengunggah** — tidak lagi mentok di status MENGUNGGAH 0%.
+
+## Perbaikan: Unggahan Batch Mentok 0%
+
+- **Penyebabnya** (race condition): antrean pengunggah dijalankan tepat saat daftar video baru saja ditambahkan, tetapi masih membaca daftar versi lama — sehingga pengunggah "tidak menemukan" video yang barusan masuk dan berhenti tanpa pernah mengunggah. Videonya tampak masuk antrean, tapi statusnya diam di **0%** dan tidak bisa diproses.
+- **Kini** antrean unggahan otomatis berjalan setiap daftar antrean berubah — video langsung diunggah satu per satu dengan progres berjalan normal, lalu berstatus **SIAP** dan siap di-**PROSES**.
+- Bonus: unggahan yang sempat terputus/nyangkut juga otomatis dilanjutkan tanpa perlu mengimpor ulang.
+- Unggah tunggal (Tarik & Lepas) tidak terdampak — tetap bekerja seperti biasa.
+- Sudah diverifikasi uji end-to-end nyata: impor batch 3 video sekaligus → 3× SIAP → PROSES SEMUA → 3× SELESAI dengan hasil 1080×1920.
+
+## Cara Upgrade
+
+1. **Uninstall** KolosalCut lama (Settings → Apps → KolosalCut → Uninstall).
+2. Unduh & install **`KolosalCut-Setup-1.3.1.exe`** (di bawah).
+3. Jika SmartScreen muncul: **More info → Run anyway**.
+4. Buka aplikasi — pastikan header tertulis **v1.3.1**.
+
+## Isi Rilis
+
+| Berkas | Keterangan |
+|---|---|
+| `KolosalCut-Setup-1.3.1.exe` | Installer Windows (disarankan) |
+| `KolosalCut-Portable-1.3.1.exe` | Versi portabel tanpa instalasi |
+
+---
+
 # KolosalCut v1.3.0
 
 Fitur baru di menu **07 Rasio & Zoom**: slider **AMBIL BAGIAN** — geser kiri ↔ kanan untuk menentukan **bagian mana dari video yang diambil** saat di-zoom / dipotong ke 9:16.

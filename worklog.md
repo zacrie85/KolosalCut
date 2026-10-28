@@ -188,3 +188,19 @@ Work Log:
 
 Stage Summary:
 - User kini bisa memilih sisi kiri/tengah/kanan video yang diambil saat crop/zoom 9:16, pratinjau langsung, tersalin ke semua video; default tengah = perilaku lama
+
+---
+Task ID: 9
+Agent: main (Z.ai)
+Task: v1.3.1 — fix impor batch "PILIH BEBERAPA VIDEO SEKALIGUS" mentok MENGUNGGAH 0%
+
+Work Log:
+- Laporan user: video masuk daftar antrean tapi status unggahan mentok 0%, tidak bisa di-render/split
+- Akar (race condition): addFiles memanggil flushUploads() secara sinkron SEBELUM React commit setItems; flushUploads membaca itemsRef yang masih berisi daftar lama -> find tidak menemukan item "mengunggah" -> loop langsung berhenti; tidak ada pemanggil ulang -> mentok 0% permanen. Jalur unggah tunggal (UploadZone) aman karena mengunggah lewat jalurnya sendiri
+- FIX page.tsx: pompa antrean dipindah ke useEffect([items, flushUploads]) -> dijamin berjalan SETELAH commit daftar; uploadLoopRef tetap mencegah loop ganda; efek alami melanjutkan unggahan yang nyangkut
+- Kendala lingkungan: src/app/api/upload/route.ts terhapus dari working tree sandbox (masih utuh di HEAD -> rilis CI v1.2.0-v1.3.0 TIDAK terdampak; server uji lokal 404) -> dipulihkan via git checkout HEAD; dipelajari: commit berikutnya add file eksplisit (bukan add -A) karena banyak file platform berubah mode 0-diff
+- E2E browser nyata (agent-browser + server standalone port 3955): impor batch 3 video -> 3x SIAP (fix terbukti; sebelum fix: mentok/GAGAL), PROSES SEMUA -> 3x SELESAI, MP4 keluaran 1080x1920 tervalidasi ffprobe
+- package.json 1.3.1; RELEASE_NOTES.md seksi v1.3.1
+
+Stage Summary:
+- Impor batch kini benar-benar mengunggah: 3 video uji -> SIAP -> PROSES SEMUA -> SELESAI end-to-end
