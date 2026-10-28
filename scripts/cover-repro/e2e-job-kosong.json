@@ -1,0 +1,30 @@
+{
+  "id": "d393915c24",
+  "status": "done",
+  "phase": "Selesai",
+  "progress": 1,
+  "total": 3,
+  "parts": [
+    {
+      "file": "Video-Uji-Judul-Part-1.mp4",
+      "thumb": "thumb_1.jpg",
+      "size": 3507714,
+      "duration": 6
+    },
+    {
+      "file": "Video-Uji-Judul-Part-2.mp4",
+      "thumb": "thumb_2.jpg",
+      "size": 3674688,
+      "duration": 6
+    },
+    {
+      "file": "Video-Uji-Judul-Part-3.mp4",
+      "thumb": "thumb_3.jpg",
+      "size": 2096525,
+      "duration": 4
+    }
+  ],
+  "title": "Video Uji Judul",
+  "createdAt": 1793231144882,
+  "outDir": "/tmp/kolosalcut-data/exports/d393915c24"
+}

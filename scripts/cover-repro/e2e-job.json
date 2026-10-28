@@ -1,0 +1,30 @@
+{
+  "id": "875e22af16",
+  "status": "done",
+  "phase": "Selesai",
+  "progress": 1,
+  "total": 3,
+  "parts": [
+    {
+      "file": "JUDUL-E2E-UJI-KAWAN-Part-1.mp4",
+      "thumb": "thumb_1.jpg",
+      "size": 3753307,
+      "duration": 6
+    },
+    {
+      "file": "JUDUL-E2E-UJI-KAWAN-Part-2.mp4",
+      "thumb": "thumb_2.jpg",
+      "size": 3938471,
+      "duration": 6
+    },
+    {
+      "file": "JUDUL-E2E-UJI-KAWAN-Part-3.mp4",
+      "thumb": "thumb_3.jpg",
+      "size": 2332191,
+      "duration": 4
+    }
+  ],
+  "title": "JUDUL E2E UJI KAWAN",
+  "createdAt": 1793230561252,
+  "outDir": "/tmp/kolosalcut-data/exports/875e22af16"
+}

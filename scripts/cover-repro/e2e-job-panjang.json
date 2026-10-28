@@ -1,0 +1,30 @@
+{
+  "id": "4271cb2fea",
+  "status": "done",
+  "phase": "Selesai",
+  "progress": 1,
+  "total": 3,
+  "parts": [
+    {
+      "file": "Judul-Video-Yang-Cukup-Panjang-Untuk-Menguji-Word-Wrap-Dua-B-Part-1.mp4",
+      "thumb": "thumb_1.jpg",
+      "size": 3618576,
+      "duration": 6
+    },
+    {
+      "file": "Judul-Video-Yang-Cukup-Panjang-Untuk-Menguji-Word-Wrap-Dua-B-Part-2.mp4",
+      "thumb": "thumb_2.jpg",
+      "size": 3786865,
+      "duration": 6
+    },
+    {
+      "file": "Judul-Video-Yang-Cukup-Panjang-Untuk-Menguji-Word-Wrap-Dua-B-Part-3.mp4",
+      "thumb": "thumb_3.jpg",
+      "size": 2199645,
+      "duration": 4
+    }
+  ],
+  "title": "Judul Video Yang Cukup Panjang Untuk Menguji Word Wrap Dua Baris",
+  "createdAt": 1793231124411,
+  "outDir": "/tmp/kolosalcut-data/exports/4271cb2fea"
+}
