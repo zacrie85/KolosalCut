@@ -22,3 +22,18 @@ Stage Summary:
 - Test e2e #2: video 16s → 2 bagian, cover sama 3s, hollywood, bar besar, fit+blur zoom 1.6 → SEMUA BENAR (11s per bagian, blur bg + zoom terlihat, PART 2 berurutan)
 - Verifikasi browser (agent-browser): upload via UI ✓, judul otomatis dari nama file ✓, drag teks di canvas ✓, pratinjau cover ✓, render dari UI ✓, panel hasil + unduh ✓, mobile 390px ✓, nol error console/dev.log
 - Artefak: aplikasi siap pakai di route "/" ; test scripts di /home/z/my-project/scripts/
+
+---
+Task ID: 2
+Agent: main (Z.ai)
+Task: Upgrade posisi judul, label part, dan deskripsi — ganti pilihan Atas/Tengah/Bawah dengan geser bebas (atas, bawah, kiri, kanan)
+
+Work Log:
+- video-config.ts: hapus type TextZone, field zone, dan ZONE_Y; TextElement kini murni koordinat bebas relX/relY (0..1); pickText tidak lagi memvalidasi zone
+- settings-panel.tsx: hapus komponen ZonePicker; buat komponen PositionPad baru — mini-pad 9:16 (drag titik bebas semua arah, grid panduan, garis tengah), tombol panah atas/bawah/kiri/kanan (nudge 2%), tombol pusatkan horizontal, readout X/Y %, dukungan keyboard arrow (Shift = langkah 6%)
+- preview-canvas.tsx: tambah garis bantu alignment silang putus-putus saat teks digeser; perbarui teks tips
+- Verifikasi browser: tombol panah mengubah posisi (Y 5.5→1.5, X 50→48), drag mini-pad akurat (82%/94% sesuai koordinat mouse), drag di canvas pratinjau bebas (37%/32%), render FFmpeg 3 bagian menghasilkan judul tepat di posisi geser (frame 1080x1920 diverifikasi visual)
+- Lint bersih (0 error), artefak uji dibersihkan
+
+Stage Summary:
+- Posisi judul/label/deskripsi kini 100% bebas digeser via 3 cara: drag langsung di pratinjau, drag di mini-pad, tombol panah; renderer FFmpeg sudah sejak awal memakai relX/relY sehingga tidak perlu perubahan server

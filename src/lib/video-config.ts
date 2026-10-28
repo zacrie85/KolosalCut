@@ -3,7 +3,6 @@
 // ============================================================
 
 export type SplitMode = "duration" | "parts";
-export type TextZone = "top" | "center" | "bottom";
 export type LabelFormat = "part" | "bagian" | "eps" | "episode" | "custom";
 export type FramePresetKey =
   | "kolosal"
@@ -20,10 +19,9 @@ export type BarSize = "kecil" | "sedang" | "besar";
 export interface TextElement {
   enabled: boolean;
   text: string;
-  zone: TextZone;
-  /** posisi horizontal pusat teks 0..1 (diatur lewat drag) */
+  /** posisi horizontal pusat teks 0..1 — digeser bebas via drag pad / kanvas pratinjau */
   relX: number;
-  /** posisi vertical atas teks 0..1 (diatur lewat drag) */
+  /** posisi vertikal atas teks 0..1 — digeser bebas via drag pad / kanvas pratinjau */
   relY: number;
   /** ukuran font pada kanvas 1080px */
   size: number;
@@ -53,12 +51,6 @@ export interface Settings {
   zoom: number;
   quality: QualityKey;
 }
-
-export const ZONE_Y: Record<TextZone, number> = {
-  top: 0.055,
-  center: 0.45,
-  bottom: 0.86,
-};
 
 /** tinggi bar sinema (px pada kanvas 1080x1920) */
 export const BAR_H: Record<BarSize, number> = {
@@ -168,7 +160,6 @@ export const DEFAULT_SETTINGS: Settings = {
   title: {
     enabled: true,
     text: "",
-    zone: "top",
     relX: 0.5,
     relY: 0.055,
     size: 58,
@@ -178,7 +169,6 @@ export const DEFAULT_SETTINGS: Settings = {
     format: "part",
     prefix: "BAGIAN KE-{n}",
     text: "",
-    zone: "top",
     relX: 0.5,
     relY: 0.14,
     size: 44,
@@ -186,7 +176,6 @@ export const DEFAULT_SETTINGS: Settings = {
   desc: {
     enabled: false,
     text: "",
-    zone: "bottom",
     relX: 0.5,
     relY: 0.86,
     size: 38,
@@ -293,9 +282,6 @@ function pickText(raw: unknown, def: TextElement): TextElement {
   return {
     enabled: typeof r.enabled === "boolean" ? r.enabled : def.enabled,
     text: typeof r.text === "string" ? r.text.slice(0, 400) : def.text,
-    zone: (["top", "center", "bottom"] as TextZone[]).includes(r.zone as TextZone)
-      ? (r.zone as TextZone)
-      : def.zone,
     relX: clamp(Number(r.relX ?? def.relX) || def.relX, 0.02, 0.98),
     relY: clamp(Number(r.relY ?? def.relY) || def.relY, 0.01, 0.99),
     size: clamp(Number(r.size ?? def.size) || def.size, 24, 110),

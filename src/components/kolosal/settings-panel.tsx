@@ -1,6 +1,7 @@
 "use client";
 
-import { Settings, TextZone, LabelFormat, FRAME_PRESETS, QUALITY_INFO, QualityKey } from "@/lib/video-config";
+import { useRef } from "react";
+import { Settings, LabelFormat, FRAME_PRESETS, QUALITY_INFO, QualityKey, TextElement } from "@/lib/video-config";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Scissors, Image as ImageIcon, Type, Hash, MessageSquare, Palette, Proportions, Gauge } from "lucide-react";
+import {
+  Scissors,
+  Image as ImageIcon,
+  Type,
+  Hash,
+  MessageSquare,
+  Palette,
+  Proportions,
+  Gauge,
+  Move,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+} from "lucide-react";
 
 interface SettingsPanelProps {
   settings: Settings;
@@ -43,47 +59,199 @@ function Section({
   );
 }
 
-function ZonePicker({
-  value,
+const clampX = (v: number) => Math.min(0.98, Math.max(0.02, v));
+const clampY = (v: number) => Math.min(0.99, Math.max(0.01, v));
+
+/**
+ * PositionPad — pengganti pilihan atas/tengah/bawah.
+ * Posisi teks digeser BEBAS ke atas, bawah, kiri, dan kanan lewat:
+ * 1. drag titik di mini-pad 9:16, atau
+ * 2. tombol panah untuk geser halus.
+ */
+function PositionPad({
+  el,
   onChange,
   disabled,
 }: {
-  value: TextZone;
-  onChange: (z: TextZone) => void;
+  el: TextElement;
+  onChange: (patch: Partial<TextElement>) => void;
   disabled?: boolean;
 }) {
-  const opts: Array<{ v: TextZone; l: string }> = [
-    { v: "top", l: "Atas" },
-    { v: "center", l: "Tengah" },
-    { v: "bottom", l: "Bawah" },
-  ];
+  const padRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const applyFromPointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    const pad = padRef.current;
+    if (!pad) return;
+    const rect = pad.getBoundingClientRect();
+    const relX = clampX((e.clientX - rect.left) / rect.width);
+    const relY = clampY((e.clientY - rect.top) / rect.height);
+    onChange({ relX, relY });
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    e.preventDefault();
+    draggingRef.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    applyFromPointer(e);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current || disabled) return;
+    applyFromPointer(e);
+  };
+
+  const endDrag = () => {
+    draggingRef.current = false;
+  };
+
+  const nudge = (dx: number, dy: number) =>
+    onChange({ relX: clampX(el.relX + dx), relY: clampY(el.relY + dy) });
+
+  const arrowCls =
+    "h-8 w-8 p-0 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-amber-300 disabled:opacity-40";
+
   return (
-    <div className="flex gap-1.5">
-      {opts.map((o) => (
+    <div className="flex items-center gap-3">
+      {/* mini-pad 9:16 — drag bebas */}
+      <div
+        ref={padRef}
+        role="slider"
+        aria-label="Geser posisi teks (atas, bawah, kiri, kanan)"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(el.relX * 100)}
+        aria-valuetext={`horizontal ${Math.round(el.relX * 100)}%, vertikal ${Math.round(el.relY * 100)}%`}
+        tabIndex={disabled ? -1 : 0}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          const step = e.shiftKey ? 0.06 : 0.02;
+          if (e.key === "ArrowUp") {
+            e.preventDefault();
+            nudge(0, -step);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            nudge(0, step);
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            nudge(-step, 0);
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            nudge(step, 0);
+          }
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        className={`relative shrink-0 w-[72px] aspect-[9/16] rounded-lg border bg-zinc-950 touch-none select-none ${
+          disabled ? "border-zinc-800 opacity-50" : "border-zinc-700 cursor-grab active:cursor-grabbing"
+        }`}
+        style={{
+          backgroundImage:
+            "linear-gradient(#27272a 1px, transparent 1px), linear-gradient(90deg, #27272a 1px, transparent 1px)",
+          backgroundSize: "25% 25%",
+        }}
+      >
+        {/* garis tengah horizontal sebagai panduan */}
+        <div className="absolute inset-x-1 top-1/2 border-t border-dashed border-zinc-800 pointer-events-none" />
+        {/* titik posisi teks */}
+        <div
+          className="absolute w-5 h-5 rounded-full bg-amber-500 border-2 border-zinc-950 shadow-md shadow-amber-500/40 pointer-events-none"
+          style={{
+            left: `${el.relX * 100}%`,
+            top: `${el.relY * 100}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+        />
+      </div>
+
+      {/* tombol panah: geser halus atas bawah kiri kanan */}
+      <div className="flex flex-col items-center gap-1">
         <Button
-          key={o.v}
           type="button"
           size="sm"
+          variant="outline"
           disabled={disabled}
-          variant={value === o.v ? "default" : "outline"}
-          className={`h-7 px-3 text-xs flex-1 ${
-            value === o.v ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"
-          }`}
-          onClick={() => onChange(o.v)}
+          className={arrowCls}
+          aria-label="Geser ke atas"
+          onClick={() => nudge(0, -0.02)}
         >
-          {o.l}
+          <ChevronUp className="w-4 h-4" />
         </Button>
-      ))}
+        <div className="flex gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled}
+            className={arrowCls}
+            aria-label="Geser ke kiri"
+            onClick={() => nudge(-0.02, 0)}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled}
+            className="h-8 w-8 p-0 border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40"
+            aria-label="Pusatkan horizontal"
+            title="Pusatkan horizontal"
+            onClick={() => onChange({ relX: 0.5 })}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled}
+            className={arrowCls}
+            aria-label="Geser ke kanan"
+            onClick={() => nudge(0.02, 0)}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          className={arrowCls}
+          aria-label="Geser ke bawah"
+          onClick={() => nudge(0, 0.02)}
+        >
+          <ChevronDown className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* readout posisi */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+          <Move className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden />
+          <span className="tabular-nums">
+            X {Math.round(el.relX * 100)}% · Y {Math.round(el.relY * 100)}%
+          </span>
+        </div>
+        <p className="text-[11px] text-zinc-500 leading-snug mt-1">
+          Geser titik di kotak mini (bebas semua arah) atau pakai tombol panah. Bisa juga geser
+          langsung teksnya di pratinjau video.
+        </p>
+      </div>
     </div>
   );
 }
 
 export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanelProps) {
-  const setZone = (key: "title" | "label" | "desc") => (z: TextZone) => {
-    const el = s[key];
-    const y = z === "top" ? 0.055 : z === "center" ? 0.45 : 0.86;
-    onChange({ [key]: { ...el, zone: z, relY: y } } as Partial<Settings>);
-  };
+  const setEl =
+    (key: "title" | "label" | "desc") =>
+    (patch: Partial<TextElement>) => {
+      onChange({ [key]: { ...s[key], ...patch } } as Partial<Settings>);
+    };
   const setSize =
     (key: "title" | "label" | "desc") =>
     (v: number[]) => {
@@ -279,7 +447,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
           placeholder="Isi otomatis dari nama file..."
           className="h-9 bg-zinc-950 border-zinc-700 text-sm"
         />
-        <ZonePicker value={s.title.zone} onChange={setZone("title")} disabled={disabled} />
+        <PositionPad el={s.title} onChange={setEl("title")} disabled={disabled} />
         <div className="flex items-center gap-3">
           <Label className="text-xs text-zinc-400 shrink-0">Ukuran</Label>
           <Slider
@@ -334,7 +502,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
             />
           )}
         </div>
-        <ZonePicker value={s.label.zone} onChange={setZone("label")} disabled={disabled} />
+        <PositionPad el={s.label} onChange={setEl("label")} disabled={disabled} />
         <div className="flex items-center gap-3">
           <Label className="text-xs text-zinc-400 shrink-0">Ukuran</Label>
           <Slider
@@ -370,7 +538,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
           rows={3}
           className="bg-zinc-950 border-zinc-700 text-sm resize-none"
         />
-        <ZonePicker value={s.desc.zone} onChange={setZone("desc")} disabled={disabled} />
+        <PositionPad el={s.desc} onChange={setEl("desc")} disabled={disabled} />
         <div className="flex items-center gap-3">
           <Label className="text-xs text-zinc-400 shrink-0">Ukuran</Label>
           <Slider

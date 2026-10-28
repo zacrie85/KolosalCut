@@ -223,6 +223,27 @@ export function PreviewCanvas({
       }
     }
     bboxesRef.current = bboxes;
+
+    // garis bantu alignment saat menggeser teks (silang putus-putus)
+    const dragKey = dragRef.current?.key;
+    if (dragKey) {
+      const bb = bboxes.find((b) => b.key === dragKey);
+      if (bb) {
+        ctx.save();
+        ctx.setLineDash([5, 6]);
+        ctx.strokeStyle = "rgba(242,193,78,0.5)";
+        ctx.lineWidth = 1;
+        const gcx = bb.x + bb.w / 2;
+        const gcy = bb.y + bb.h / 2;
+        ctx.beginPath();
+        ctx.moveTo(gcx, 0);
+        ctx.lineTo(gcx, CH);
+        ctx.moveTo(0, gcy);
+        ctx.lineTo(CW, gcy);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
   }, [settings, partNum, videoUrl]);
 
   // loop gambar
@@ -376,8 +397,9 @@ export function PreviewCanvas({
         )}
 
         <p className="text-[11px] text-zinc-500 leading-snug">
-          Tips: <span className="text-zinc-300">klik & geser teks langsung di pratinjau</span> untuk
-          memindahkan posisi judul, label, atau deskripsi.
+          Tips: <span className="text-zinc-300">klik & geser teks langsung di pratinjau</span> —
+          bebas ke atas, bawah, kiri, dan kanan. Atur posisi juga lewat pad geser di panel
+          pengaturan.
         </p>
       </div>
 
