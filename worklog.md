@@ -37,3 +37,23 @@ Work Log:
 
 Stage Summary:
 - Posisi judul/label/deskripsi kini 100% bebas digeser via 3 cara: drag langsung di pratinjau, drag di mini-pad, tombol panah; renderer FFmpeg sudah sejak awal memakai relX/relY sehingga tidak perlu perubahan server
+
+---
+Task ID: 3
+Agent: main (Z.ai)
+Task: Redesign total tampilan KolosalCut menjadi gaya futuristik "Neon HUD" (layout + tema)
+
+Work Log:
+- globals.css: tema baru deep-space blue + neon cyan/violet; token primary/ring/bg diganti; utilitas .glass (glassmorphism), .grid-overlay, .orb + animasi drift, .led pulse, .scan-sweep, .data-stream, .title-gradient, .neon-cyan, .font-display/.font-tech; scrollbar & range slider cyan
+- layout.tsx: font Orbitron (display) + Share Tech Mono (teknis) via next/font/google; themeColor #04060d
+- Komponen baru hud.tsx: HudCorners (4 sudut kurung HUD)
+- page.tsx: latar fixed (gradien radial + 3 orb blur beranimasi + grid), header glass dengan logo glow + judul gradien + chip LED mono + garis data-stream, panel ringkasan HUD dengan teks mono uppercase, CTA gradien cyan-indigo ber-glow dengan sudut HUD, footer mono
+- settings-panel.tsx: Section jadi panel kaca bernomor 01-08 (judul Orbitron uppercase tracking), semua aksen amber→cyan, pad geser titik cyan glow
+- preview-canvas.tsx: frame pratinjau kini monitor HUD (label LIVE PREVIEW + MONITOR // 01, sudut HUD, glow cyan), sorotan drag & garis bantu alignment cyan neon
+- upload-zone.tsx: dropzone kaca dengan glow saat drag-over, teks mono uppercase; kartu video terunggah bergaya HUD
+- result-panel.tsx: panel kaca + sudut HUD, tombol unduh gradien, baris hasil cyan
+- Verifikasi: lint bersih; browser test — upload video ✓, drag teks di canvas tetap akurat (31%/35%) ✓, render 3 bagian ✓, panel hasil ✓, mobile 390px ✓, nol error console
+- Artefak uji dibersihkan
+
+Stage Summary:
+- Tampilan kini bertema "Neon Video Engine": panel kaca + HUD cyan/violet, tanpa perubahan logika fungsional apa pun (render, geser, split semua tetap sama)

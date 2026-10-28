@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { UploadCloud, FileVideo, X } from "lucide-react";
 import { fmtDur } from "@/lib/video-config";
+import { HudCorners } from "@/components/kolosal/hud";
 
 export interface UploadResult {
   uploadId: string;
@@ -71,16 +72,17 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError }: UploadZ
 
   if (uploaded) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
+      <div className="glass rounded-xl p-4 relative flex flex-col gap-3">
+        <HudCorners />
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2">
-            <FileVideo className="w-5 h-5 text-amber-400" aria-hidden />
+          <div className="mt-0.5 rounded-lg bg-cyan-400/10 border border-cyan-300/30 p-2 shadow-[0_0_14px_-4px_rgba(34,211,238,0.6)]">
+            <FileVideo className="w-5 h-5 text-cyan-300" aria-hidden />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-zinc-100 truncate" title={uploaded.originalName}>
               {uploaded.originalName}
             </p>
-            <p className="text-xs text-zinc-400 mt-0.5 tabular-nums">
+            <p className="font-tech text-[11px] text-cyan-100/50 mt-0.5 tabular-nums">
               {fmtDur(uploaded.duration)} • {uploaded.width}×{uploaded.height} •{" "}
               {(uploaded.size / 1024 / 1024).toFixed(1)} MB • {uploaded.hasAudio ? "beraudio" : "tanpa audio"}
             </p>
@@ -88,7 +90,7 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError }: UploadZ
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 text-zinc-400 hover:text-zinc-100"
+            className="h-7 w-7 text-zinc-400 hover:text-cyan-200"
             onClick={onCleared}
             aria-label="Ganti video"
           >
@@ -97,10 +99,10 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError }: UploadZ
         </div>
         <Button
           variant="outline"
-          className="w-full h-9 border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+          className="w-full h-9 border-cyan-300/30 text-cyan-200 hover:bg-cyan-400/10 hover:border-cyan-300/60 font-tech tracking-wider text-xs"
           onClick={() => inputRef.current?.click()}
         >
-          Ganti Video
+          GANTI VIDEO
         </Button>
         <input
           ref={inputRef}
@@ -119,10 +121,10 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError }: UploadZ
 
   return (
     <div
-      className={`rounded-xl border-2 border-dashed p-6 flex flex-col items-center gap-3 text-center transition-colors ${
+      className={`glass rounded-xl border-2 border-dashed p-6 relative flex flex-col items-center gap-3 text-center transition-all duration-300 ${
         dragOver
-          ? "border-amber-400 bg-amber-500/5"
-          : "border-zinc-700 bg-zinc-900/60 hover:border-zinc-500"
+          ? "border-cyan-300 bg-cyan-400/10 shadow-[0_0_36px_-6px_rgba(34,211,238,0.65)]"
+          : "border-cyan-300/30 hover:border-cyan-300/70"
       }`}
       onDragOver={(e) => {
         e.preventDefault();
@@ -136,23 +138,28 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError }: UploadZ
         if (f) doUpload(f);
       }}
     >
-      <div className="rounded-full bg-amber-500/10 border border-amber-500/30 p-3">
-        <UploadCloud className="w-7 h-7 text-amber-400" aria-hidden />
+      <HudCorners className={dragOver ? "opacity-100" : "opacity-60"} />
+      <div className="relative rounded-full bg-cyan-400/10 border border-cyan-300/35 p-3.5 shadow-[0_0_22px_-4px_rgba(34,211,238,0.7)]">
+        <UploadCloud className="w-7 h-7 text-cyan-300" aria-hidden />
       </div>
       <div>
-        <p className="text-sm font-medium text-zinc-100">Tarik & lepas video ke sini</p>
-        <p className="text-xs text-zinc-400 mt-1">
-          MP4, MOV, MKV, WebM, AVI — maksimal 500MB
+        <p className="font-display text-xs font-bold tracking-[0.16em] text-zinc-100">
+          TARIK &amp; LEPAS VIDEO KE SINI
+        </p>
+        <p className="font-tech text-[11px] text-cyan-100/50 mt-1.5">
+          MP4, MOV, MKV, WebM, AVI — MAKS 500MB
         </p>
       </div>
       {busy ? (
         <div className="w-full max-w-[240px] flex flex-col gap-1.5">
           <Progress value={progress} className="h-2" />
-          <p className="text-[11px] text-zinc-400 tabular-nums">Mengunggah... {progress}%</p>
+          <p className="font-tech text-[11px] text-cyan-200/80 tabular-nums">
+            MENGUNGGAH... {progress}%
+          </p>
         </div>
       ) : (
         <Button
-          className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold"
+          className="bg-gradient-to-r from-cyan-500 to-indigo-400 hover:from-cyan-400 hover:to-indigo-300 text-slate-950 font-semibold shadow-[0_0_20px_rgba(34,211,238,0.4)]"
           onClick={() => inputRef.current?.click()}
         >
           Pilih File Video

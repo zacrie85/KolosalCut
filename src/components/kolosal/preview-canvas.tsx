@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Film } from "lucide-react";
+import { HudCorners } from "@/components/kolosal/hud";
 
 const CW = 540; // lebar kanvas internal
 const CH = 960; // tinggi kanvas internal
@@ -215,7 +216,9 @@ export function PreviewCanvas({
       if (active) {
         ctx.save();
         ctx.setLineDash([6, 5]);
-        ctx.strokeStyle = "rgba(242,193,78,0.95)";
+        ctx.strokeStyle = "rgba(103,232,249,0.95)";
+        ctx.shadowColor = "rgba(34,211,238,0.75)";
+        ctx.shadowBlur = 8;
         ctx.lineWidth = 1.5;
         const bb = bboxes[bboxes.length - 1];
         ctx.strokeRect(bb.x, bb.y, bb.w, bb.h);
@@ -231,7 +234,7 @@ export function PreviewCanvas({
       if (bb) {
         ctx.save();
         ctx.setLineDash([5, 6]);
-        ctx.strokeStyle = "rgba(242,193,78,0.5)";
+        ctx.strokeStyle = "rgba(103,232,249,0.55)";
         ctx.lineWidth = 1;
         const gcx = bb.x + bb.w / 2;
         const gcy = bb.y + bb.h / 2;
@@ -315,24 +318,37 @@ export function PreviewCanvas({
 
   return (
     <div className="flex flex-col items-center gap-3 w-full">
-      <div className="relative rounded-xl overflow-hidden border border-zinc-800 shadow-2xl shadow-black/60 bg-black">
-        <canvas
-          ref={canvasRef}
-          width={CW}
-          height={CH}
-          className="w-full max-w-[340px] sm:max-w-[380px] aspect-[9/16] touch-none select-none"
-          style={{ cursor }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerLeave={onPointerUp}
-          aria-label="Pratinjau video 9:16"
-        />
-        {!videoUrl && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <Film className="w-10 h-10 text-zinc-700" aria-hidden />
-          </div>
-        )}
+      <div className="w-full max-w-[340px] sm:max-w-[380px] flex flex-col">
+        {/* label monitor */}
+        <div className="flex items-center justify-between font-tech text-[10px] tracking-[0.22em] px-0.5 pb-1.5">
+          <span className="flex items-center gap-1.5 text-cyan-300/90">
+            <span className="led w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" aria-hidden />
+            LIVE PREVIEW
+          </span>
+          <span className="text-zinc-500">MONITOR // 01</span>
+        </div>
+        <div
+          className="relative rounded-xl overflow-hidden border border-cyan-300/25 bg-black shadow-[0_0_34px_-8px_rgba(34,211,238,0.45),0_24px_48px_-24px_rgba(2,8,23,0.9)]"
+        >
+          <HudCorners />
+          <canvas
+            ref={canvasRef}
+            width={CW}
+            height={CH}
+            className="w-full aspect-[9/16] touch-none select-none"
+            style={{ cursor }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={onPointerUp}
+            aria-label="Pratinjau video 9:16"
+          />
+          {!videoUrl && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <Film className="w-10 h-10 text-cyan-200/25" aria-hidden />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* kontrol bawah */}

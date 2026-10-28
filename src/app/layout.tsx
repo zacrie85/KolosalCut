@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Orbitron, Share_Tech_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -13,10 +13,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const orbitron = Orbitron({
+  variable: "--font-orbitron",
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800", "900"],
+});
+
+const techMono = Share_Tech_Mono({
+  variable: "--font-tech-mono",
+  subsets: ["latin"],
+  weight: "400",
+});
+
 export const metadata: Metadata = {
-  title: "KolosalCut — Studio Split & Edit Video 9:16",
+  title: "KolosalCut — Neon Studio Split & Edit Video 9:16",
   description:
-    "Aplikasi edit dan split video: potong per durasi atau jumlah bagian, cover otomatis 2-3 detik, judul dari nama file, label Part/Eps urut, gaya frame film kolosal & Hollywood, rasio 9:16 penuh atau biasa dengan zoom manual, serta deskripsi yang bisa digeser bebas.",
+    "Studio futuristik untuk edit dan split video: potong per durasi atau jumlah bagian, cover otomatis 2-3 detik, judul dari nama file, label Part/Eps urut dengan posisi geser bebas, gaya frame film kolosal & Hollywood, rasio 9:16 penuh atau biasa dengan zoom manual, serta deskripsi yang bisa digeser ke segala arah.",
   keywords: [
     "split video",
     "edit video",
@@ -32,7 +44,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#09090b",
+  themeColor: "#04060d",
 };
 
 export default function RootLayout({
@@ -43,7 +55,7 @@ export default function RootLayout({
   return (
     <html lang="id" className="dark" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} ${orbitron.variable} ${techMono.variable} antialiased bg-background text-foreground`}
       >
         {children}
         <Toaster />

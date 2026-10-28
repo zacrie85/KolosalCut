@@ -40,19 +40,30 @@ interface SettingsPanelProps {
 }
 
 function Section({
+  num,
   icon,
   title,
   children,
 }: {
+  num: string;
   icon: React.ReactNode;
   title: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60">
-      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <span className="text-amber-400">{icon}</span>
-        <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
+    <div className="glass rounded-xl relative overflow-hidden group">
+      <div
+        aria-hidden
+        className="absolute top-0 left-0 h-full w-[2px] bg-gradient-to-b from-cyan-300/70 via-cyan-400/15 to-transparent"
+      />
+      <div className="flex items-center gap-2 px-4 pt-3.5 pb-2">
+        <span className="font-tech text-[10px] text-cyan-400/70" aria-hidden>
+          {num}
+        </span>
+        <span className="text-cyan-300">{icon}</span>
+        <h3 className="font-display text-[11px] font-bold tracking-[0.18em] uppercase text-zinc-100 group-hover:text-cyan-200 transition-colors">
+          {title}
+        </h3>
       </div>
       <div className="px-4 pb-4 flex flex-col gap-3">{children}</div>
     </div>
@@ -110,7 +121,7 @@ function PositionPad({
     onChange({ relX: clampX(el.relX + dx), relY: clampY(el.relY + dy) });
 
   const arrowCls =
-    "h-8 w-8 p-0 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-amber-300 disabled:opacity-40";
+    "h-8 w-8 p-0 border-cyan-300/25 text-zinc-300 hover:bg-cyan-400/10 hover:text-cyan-200 hover:border-cyan-300/60 disabled:opacity-40";
 
   return (
     <div className="flex items-center gap-3">
@@ -145,8 +156,8 @@ function PositionPad({
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        className={`relative shrink-0 w-[72px] aspect-[9/16] rounded-lg border bg-zinc-950 touch-none select-none ${
-          disabled ? "border-zinc-800 opacity-50" : "border-zinc-700 cursor-grab active:cursor-grabbing"
+        className={`relative shrink-0 w-[72px] aspect-[9/16] rounded-lg border bg-slate-950 touch-none select-none ${
+          disabled ? "border-zinc-800 opacity-50" : "border-cyan-300/35 cursor-grab active:cursor-grabbing shadow-[0_0_14px_-4px_rgba(34,211,238,0.5)]"
         }`}
         style={{
           backgroundImage:
@@ -155,10 +166,10 @@ function PositionPad({
         }}
       >
         {/* garis tengah horizontal sebagai panduan */}
-        <div className="absolute inset-x-1 top-1/2 border-t border-dashed border-zinc-800 pointer-events-none" />
+        <div className="absolute inset-x-1 top-1/2 border-t border-dashed border-cyan-300/15 pointer-events-none" />
         {/* titik posisi teks */}
         <div
-          className="absolute w-5 h-5 rounded-full bg-amber-500 border-2 border-zinc-950 shadow-md shadow-amber-500/40 pointer-events-none"
+          className="absolute w-5 h-5 rounded-full bg-cyan-400 border-2 border-slate-950 shadow-[0_0_12px_rgba(34,211,238,0.8)] pointer-events-none"
           style={{
             left: `${el.relX * 100}%`,
             top: `${el.relY * 100}%`,
@@ -197,7 +208,7 @@ function PositionPad({
             size="sm"
             variant="outline"
             disabled={disabled}
-            className="h-8 w-8 p-0 border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40"
+            className="h-8 w-8 p-0 border-cyan-300/25 text-zinc-400 hover:bg-cyan-400/10 hover:text-cyan-200 hover:border-cyan-300/60 disabled:opacity-40"
             aria-label="Pusatkan horizontal"
             title="Pusatkan horizontal"
             onClick={() => onChange({ relX: 0.5 })}
@@ -232,7 +243,7 @@ function PositionPad({
       {/* readout posisi */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
-          <Move className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden />
+          <Move className="w-3.5 h-3.5 text-cyan-300 shrink-0" aria-hidden />
           <span className="tabular-nums">
             X {Math.round(el.relX * 100)}% · Y {Math.round(el.relY * 100)}%
           </span>
@@ -264,13 +275,13 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
   return (
     <div className="flex flex-col gap-3">
       {/* ===== PEMOTONGAN ===== */}
-      <Section icon={<Scissors className="w-4 h-4" />} title="Pemotongan Video">
+      <Section num="01" icon={<Scissors className="w-4 h-4" />} title="Pemotongan Video">
         <div className="flex gap-1.5">
           <Button
             size="sm"
             disabled={disabled}
             variant={s.splitMode === "duration" ? "default" : "outline"}
-            className={`h-8 flex-1 text-xs ${s.splitMode === "duration" ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"}`}
+            className={`h-8 flex-1 text-xs ${s.splitMode === "duration" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
             onClick={() => onChange({ splitMode: "duration" })}
           >
             Per Durasi (detik)
@@ -279,7 +290,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
             size="sm"
             disabled={disabled}
             variant={s.splitMode === "parts" ? "default" : "outline"}
-            className={`h-8 flex-1 text-xs ${s.splitMode === "parts" ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"}`}
+            className={`h-8 flex-1 text-xs ${s.splitMode === "parts" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
             onClick={() => onChange({ splitMode: "parts" })}
           >
             Per Jumlah Bagian
@@ -341,7 +352,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
       </Section>
 
       {/* ===== COVER ===== */}
-      <Section icon={<ImageIcon className="w-4 h-4" />} title="Cover Tiap Bagian">
+      <Section num="02" icon={<ImageIcon className="w-4 h-4" />} title="Cover Tiap Bagian">
         <div className="flex items-center justify-between">
           <Label htmlFor="cover-on" className="text-xs text-zinc-300">
             Tambahkan cover otomatis
@@ -360,7 +371,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
                 size="sm"
                 disabled={disabled}
                 variant={!s.coverSame ? "default" : "outline"}
-                className={`h-8 flex-1 text-xs ${!s.coverSame ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"}`}
+                className={`h-8 flex-1 text-xs ${!s.coverSame ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
                 onClick={() => onChange({ coverSame: false })}
               >
                 Cover Berbeda
@@ -369,7 +380,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
                 size="sm"
                 disabled={disabled}
                 variant={s.coverSame ? "default" : "outline"}
-                className={`h-8 flex-1 text-xs ${s.coverSame ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"}`}
+                className={`h-8 flex-1 text-xs ${s.coverSame ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
                 onClick={() => onChange({ coverSame: true })}
               >
                 Cover Sama Semua
@@ -384,7 +395,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
                     size="sm"
                     disabled={disabled}
                     variant={s.coverDuration === v ? "default" : "outline"}
-                    className={`h-7 px-3 text-xs ${s.coverDuration === v ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"}`}
+                    className={`h-7 px-3 text-xs ${s.coverDuration === v ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
                     onClick={() => onChange({ coverDuration: v })}
                   >
                     {v} detik
@@ -429,7 +440,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
       </Section>
 
       {/* ===== JUDUL ===== */}
-      <Section icon={<Type className="w-4 h-4" />} title="Judul Video (dari nama file)">
+      <Section num="03" icon={<Type className="w-4 h-4" />} title="Judul Video (dari nama file)">
         <div className="flex items-center justify-between">
           <Label htmlFor="title-on" className="text-xs text-zinc-300">
             Tampilkan judul
@@ -464,7 +475,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
       </Section>
 
       {/* ===== LABEL BAGIAN ===== */}
-      <Section icon={<Hash className="w-4 h-4" />} title="Label Part / Bagian / Eps">
+      <Section num="04" icon={<Hash className="w-4 h-4" />} title="Label Part / Bagian / Eps">
         <div className="flex items-center justify-between">
           <Label htmlFor="label-on" className="text-xs text-zinc-300">
             Tampilkan label urutan
@@ -519,7 +530,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
       </Section>
 
       {/* ===== DESKRIPSI ===== */}
-      <Section icon={<MessageSquare className="w-4 h-4" />} title="Deskripsi dalam Video">
+      <Section num="05" icon={<MessageSquare className="w-4 h-4" />} title="Deskripsi dalam Video">
         <div className="flex items-center justify-between">
           <Label htmlFor="desc-on" className="text-xs text-zinc-300">
             Tampilkan deskripsi
@@ -555,7 +566,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
       </Section>
 
       {/* ===== GAYA FILM ===== */}
-      <Section icon={<Palette className="w-4 h-4" />} title="Gaya Frame Film">
+      <Section num="06" icon={<Palette className="w-4 h-4" />} title="Gaya Frame Film">
         <div className="grid grid-cols-1 gap-1.5 max-h-[240px] overflow-y-auto kolosal-scroll pr-1">
           {FRAME_PRESETS.map((p) => (
             <button
@@ -565,12 +576,12 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
               onClick={() => onChange({ preset: p.key, bars: p.defBars })}
               className={`text-left rounded-lg border px-3 py-2 transition-colors disabled:opacity-50 ${
                 s.preset === p.key
-                  ? "border-amber-500 bg-amber-500/10"
+                  ? "border-cyan-300/50 bg-cyan-400/10"
                   : "border-zinc-700/70 bg-zinc-950 hover:border-zinc-500"
               }`}
             >
               <span
-                className={`block text-xs font-semibold ${s.preset === p.key ? "text-amber-300" : "text-zinc-200"}`}
+                className={`block text-xs font-semibold ${s.preset === p.key ? "text-cyan-200" : "text-zinc-200"}`}
               >
                 {p.name}
               </span>
@@ -598,7 +609,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
                 size="sm"
                 disabled={disabled}
                 variant={s.barSize === b ? "default" : "outline"}
-                className={`h-7 flex-1 text-xs capitalize ${s.barSize === b ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"}`}
+                className={`h-7 flex-1 text-xs capitalize ${s.barSize === b ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
                 onClick={() => onChange({ barSize: b })}
               >
                 {b}
@@ -609,13 +620,13 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
       </Section>
 
       {/* ===== RASIO & ZOOM ===== */}
-      <Section icon={<Proportions className="w-4 h-4" />} title="Rasio & Zoom">
+      <Section num="07" icon={<Proportions className="w-4 h-4" />} title="Rasio & Zoom">
         <div className="flex gap-1.5">
           <Button
             size="sm"
             disabled={disabled}
             variant={s.ratio === "full" ? "default" : "outline"}
-            className={`h-8 flex-1 text-xs ${s.ratio === "full" ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"}`}
+            className={`h-8 flex-1 text-xs ${s.ratio === "full" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
             onClick={() => onChange({ ratio: "full" })}
           >
             9:16 Penuh
@@ -624,7 +635,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
             size="sm"
             disabled={disabled}
             variant={s.ratio === "fit" ? "default" : "outline"}
-            className={`h-8 flex-1 text-xs ${s.ratio === "fit" ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"}`}
+            className={`h-8 flex-1 text-xs ${s.ratio === "fit" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
             onClick={() => onChange({ ratio: "fit" })}
           >
             9:16 Biasa + Blur
@@ -653,7 +664,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
       </Section>
 
       {/* ===== KUALITAS ===== */}
-      <Section icon={<Gauge className="w-4 h-4" />} title="Kualitas Render">
+      <Section num="08" icon={<Gauge className="w-4 h-4" />} title="Kualitas Render">
         <div className="flex gap-1.5">
           {(Object.keys(QUALITY_INFO) as QualityKey[]).map((k) => (
             <Button
@@ -661,7 +672,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
               size="sm"
               disabled={disabled}
               variant={s.quality === k ? "default" : "outline"}
-              className={`h-8 flex-1 text-xs ${s.quality === k ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 font-semibold" : "border-zinc-700 text-zinc-300"}`}
+              className={`h-8 flex-1 text-xs ${s.quality === k ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
               onClick={() => onChange({ quality: k })}
             >
               {QUALITY_INFO[k].label}
