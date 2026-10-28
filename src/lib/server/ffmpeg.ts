@@ -396,15 +396,47 @@ async function extractThumb(src: string, time: number, out: string): Promise<voi
 // ============================================================
 // Orchestrator job
 // ============================================================
+
+/**
+ * Tentukan folder output job:
+ * - default : DATA_DIR/exports/<jobId> (folder bawaan aplikasi)
+ * - pilihan : <folder pilihan user>/<Judul> (atau <Judul>-2, -3 bila sudah ada)
+ * Thumbnail & berkas sementara tetap di folder bawaan agar pratinjau ringan.
+ */
+async function resolveOutDir(job: Job): Promise<string> {
+  const fallback = path.join(EXPORTS_DIR, job.id);
+  await fs.mkdir(fallback, { recursive: true });
+  if (!job.outDir || !path.isAbsolute(job.outDir)) return fallback;
+  const base = sanitizeFile(job.title) || "video";
+  let candidate = path.join(job.outDir, base);
+  for (let k = 2; k <= 300; k++) {
+    try {
+      await fs.mkdir(candidate); // tanpa recursive: gagal jika sudah ada -> coba nama berikut
+      return candidate;
+    } catch {
+      candidate = path.join(job.outDir, `${base}-${k}`);
+    }
+  }
+  // darurat: nama unik berbasis waktu
+  candidate = path.join(job.outDir, `${base}-${Date.now()}`);
+  await fs.mkdir(candidate, { recursive: true });
+  return candidate;
+}
+
 export async function runJob(job: Job): Promise<void> {
-  const outDir = path.join(EXPORTS_DIR, job.id);
-  const tmpDir = path.join(outDir, "tmp");
+  const thumbDir = path.join(EXPORTS_DIR, job.id);
+  const tmpDir = path.join(thumbDir, "tmp");
   await fs.mkdir(tmpDir, { recursive: true });
 
   try {
     job.status = "processing";
     job.phase = "Menyiapkan...";
     job.progress = 0;
+
+    // folder hasil final (folder pilihan user bila diatur)
+    job.phase = "Menyiapkan folder hasil...";
+    const outDir = await resolveOutDir(job);
+    job.outDir = outDir;
 
     const s = job.settings;
     const segs = computeSegments(job.info.duration, s);
@@ -466,10 +498,10 @@ export async function runJob(job: Job): Promise<void> {
       const thumbName = `thumb_${n}.jpg`;
       const thumbTime = s.coverEnabled ? s.coverDuration * 0.6 : 0.2;
       try {
-        await extractThumb(outPath, thumbTime, path.join(outDir, thumbName));
+        await extractThumb(outPath, thumbTime, path.join(thumbDir, thumbName));
       } catch {
         try {
-          if (framePath) await extractThumb(framePath, 0, path.join(outDir, thumbName));
+          if (framePath) await extractThumb(framePath, 0, path.join(thumbDir, thumbName));
         } catch {
           /* thumbnail opsional */
         }

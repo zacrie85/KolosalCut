@@ -30,6 +30,8 @@ export interface Job {
   parts: PartInfo[];
   error?: string;
   createdAt: number;
+  /** folder akhir tempat file MP4 hasil disimpan (null = folder bawaan aplikasi) */
+  outDir?: string | null;
 }
 
 export interface JobPublic {
@@ -42,6 +44,8 @@ export interface JobPublic {
   error?: string;
   title: string;
   createdAt: number;
+  /** folder akhir tempat file MP4 hasil disimpan (null = folder bawaan) */
+  outDir?: string | null;
 }
 
 export function jobToPublic(j: Job): JobPublic {
@@ -55,6 +59,7 @@ export function jobToPublic(j: Job): JobPublic {
     error: j.error,
     title: j.title,
     createdAt: j.createdAt,
+    outDir: j.outDir ?? null,
   };
 }
 

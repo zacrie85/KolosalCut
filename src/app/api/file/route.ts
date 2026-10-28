@@ -4,6 +4,7 @@ import path from "path";
 import { createReadStream } from "fs";
 import { Readable } from "stream";
 import { EXPORTS_DIR } from "@/lib/server/ffmpeg";
+import { jobStore } from "@/lib/server/jobs";
 
 export const runtime = "nodejs";
 
@@ -23,9 +24,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Parameter tidak valid" }, { status: 400 });
   }
 
-  const filePath = path.join(EXPORTS_DIR, job, name);
-  if (!filePath.startsWith(path.join(EXPORTS_DIR, job))) {
-    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+  // v1.2.0: video hasil dapat berada di folder pilihan pengguna (job.outDir),
+  // sedangkan thumbnail tetap di folder bawaan aplikasi.
+  let filePath: string | null = null;
+  const rec = jobStore.get(job);
+  if (rec) {
+    const part = rec.parts.find((p) => p.file === name || p.thumb === name);
+    if (part) {
+      const baseDir =
+        name === part.file && rec.outDir ? rec.outDir : path.join(EXPORTS_DIR, rec.id);
+      filePath = path.join(baseDir, name);
+    }
+  }
+  if (!filePath) {
+    const fallback = path.join(EXPORTS_DIR, job, name);
+    if (!fallback.startsWith(path.join(EXPORTS_DIR, job))) {
+      return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+    }
+    filePath = fallback;
   }
 
   let stat;

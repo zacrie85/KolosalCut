@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Segment, fmtDur } from "@/lib/video-config";
-import { Sparkles, AudioLines, Clock3, Layers } from "lucide-react";
+import { Sparkles, AudioLines, Clock3, Layers, Scissors } from "lucide-react";
 
 interface TimelineProps {
   duration: number;
@@ -13,6 +13,8 @@ interface TimelineProps {
   caption: string;
   presetName: string;
   onPartSelect: (i: number) => void;
+  /** pemberitahuan pembagian rata (mis. mode durasi melebihi 50 bagian) */
+  notice?: string;
 }
 
 function rulerLabel(t: number) {
@@ -35,6 +37,7 @@ export function Timeline({
   caption,
   presetName,
   onPartSelect,
+  notice,
 }: TimelineProps) {
   const step = useMemo(() => {
     const steps = [2, 5, 10, 15, 30, 60, 120, 300, 600];
@@ -86,6 +89,12 @@ export function Timeline({
           <Clock3 className="w-3 h-3" aria-hidden />
           {fmtDur(duration)}
         </span>
+        {hasSegs && (
+          <span className="font-tech text-[9px] tracking-wider rounded-md border border-emerald-300/30 bg-emerald-400/10 px-2 py-1 text-emerald-200 flex items-center gap-1.5 whitespace-nowrap tabular-nums">
+            <Scissors className="w-3 h-3" aria-hidden />
+            TERBAGI HABIS
+          </span>
+        )}
         <span
           className={`font-tech text-[9px] tracking-wider rounded-md border px-2 py-1 flex items-center gap-1.5 whitespace-nowrap ${
             hasAudio
@@ -102,6 +111,14 @@ export function Timeline({
           </span>
         )}
       </div>
+
+      {/* ---- pemberitahuan pembagian rata (mode durasi > 50 bagian) ---- */}
+      {notice && (
+        <p className="text-[11px] text-amber-300/90 flex gap-1.5 items-start leading-snug">
+          <Scissors className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden />
+          {notice}
+        </p>
+      )}
 
       {/* ---- ruler waktu ---- */}
       <div className="relative h-4 hidden sm:block" aria-hidden>

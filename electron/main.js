@@ -13,7 +13,7 @@
  *  4. Mengarahkan FFmpeg/FFprobe/font/overlay ke binary yang dibundel.
  *  5. Membuka jendela desktop yang memuat antarmuka aplikasi.
  */
-const { app, BrowserWindow, dialog, Menu, shell } = require("electron");
+const { app, BrowserWindow, dialog, Menu, shell, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const net = require("net");
 const path = require("path");
@@ -255,6 +255,40 @@ function startServer(port) {
 }
 
 let lastServerErr = "";
+let lastOutputDir = "";
+
+// ============================================================
+// IPC desktop: pilih folder hasil render & buka folder hasil
+// ============================================================
+ipcMain.handle("kolosal:select-output-dir", async () => {
+  try {
+    const res = await dialog.showOpenDialog({
+      title: "Pilih Folder Hasil Render & Split",
+      message: "Semua file video hasil render akan disimpan ke folder ini",
+      defaultPath: lastOutputDir || app.getPath("videos"),
+      properties: ["openDirectory", "createDirectory"],
+      buttonLabel: "PILIH FOLDER INI",
+    });
+    if (res.canceled || !res.filePaths || res.filePaths.length === 0) return null;
+    lastOutputDir = res.filePaths[0];
+    logLine("Folder hasil dipilih: " + lastOutputDir);
+    return lastOutputDir;
+  } catch (e) {
+    logLine("Gagal membuka dialog folder: " + (e && e.message));
+    return null;
+  }
+});
+
+ipcMain.handle("kolosal:open-path", async (_event, target) => {
+  try {
+    if (typeof target !== "string" || target.length === 0 || target.length > 500) return false;
+    const res = await shell.openPath(target); // "" = sukses
+    if (res) logLine("Gagal membuka path: " + res);
+    return !res;
+  } catch {
+    return false;
+  }
+});
 
 function createWindow(port) {
   mainWindow = new BrowserWindow({
@@ -271,6 +305,7 @@ function createWindow(port) {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
   Menu.setApplicationMenu(null);

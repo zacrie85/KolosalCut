@@ -5,18 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { UploadCloud, FileVideo, X } from "lucide-react";
 import { fmtDur } from "@/lib/video-config";
+import { uploadVideo, MAX_SIZE, fmtSize, type UploadResult } from "@/lib/upload-client";
 import { HudCorners } from "@/components/kolosal/hud";
 
-export interface UploadResult {
-  uploadId: string;
-  originalName: string;
-  title: string;
-  size: number;
-  duration: number;
-  width: number;
-  height: number;
-  hasAudio: boolean;
-}
+export type { UploadResult };
 
 interface UploadZoneProps {
   uploaded: UploadResult | null;
@@ -40,38 +32,22 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError, variant }
   const doUpload = useCallback(
     (file: File) => {
       if (busy) return;
-      if (file.size > 500 * 1024 * 1024) {
-        onError("Ukuran video melebihi 500MB.");
+      if (file.size > MAX_SIZE) {
+        onError(`Ukuran video melebihi ${fmtSize(MAX_SIZE)}.`);
         return;
       }
       setBusy(true);
       setProgress(0);
-      const xhr = new XMLHttpRequest();
-      const form = new FormData();
-      form.append("file", file);
-      xhr.open("POST", "/api/upload");
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 96));
-      };
-      xhr.onload = () => {
-        setBusy(false);
-        setProgress(100);
-        try {
-          const res = JSON.parse(xhr.responseText);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            onUploaded(res as UploadResult, URL.createObjectURL(file));
-          } else {
-            onError(res.error ?? "Gagal mengunggah video.");
-          }
-        } catch {
-          onError("Respons server tidak valid.");
-        }
-      };
-      xhr.onerror = () => {
-        setBusy(false);
-        onError("Koneksi terputus saat mengunggah.");
-      };
-      xhr.send(form);
+      uploadVideo(file, setProgress)
+        .then((res) => {
+          setBusy(false);
+          setProgress(100);
+          onUploaded(res, URL.createObjectURL(file));
+        })
+        .catch((e: Error) => {
+          setBusy(false);
+          onError(e.message || "Gagal mengunggah video.");
+        });
     },
     [busy, onUploaded, onError]
   );
@@ -156,7 +132,7 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError, variant }
           TARIK &amp; LEPAS VIDEO KE SINI
         </p>
         <p className="font-tech text-[11px] text-cyan-100/50 mt-1.5">
-          MP4, MOV, MKV, WebM, AVI — MAKS 500MB
+          MP4, MOV, MKV, WebM, AVI — SAMPAI {fmtSize(MAX_SIZE)}
         </p>
       </div>
       {busy ? (

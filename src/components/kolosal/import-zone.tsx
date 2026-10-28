@@ -4,9 +4,10 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FolderUp, Files } from "lucide-react";
 import { HudCorners } from "@/components/kolosal/hud";
+import { MAX_SIZE, fmtSize } from "@/lib/upload-client";
 
 export const MAX_VIDEOS = 50;
-export const MAX_SIZE = 500 * 1024 * 1024;
+export { MAX_SIZE };
 
 interface ImportZoneProps {
   /** jumlah video yang sudah ada di antrean */
@@ -57,7 +58,7 @@ export function ImportZone({ total, onFiles }: ImportZoneProps) {
             IMPOR VIDEO — MAKS {MAX_VIDEOS}
           </p>
           <p className="font-tech text-[10px] text-cyan-100/50 mt-0.5 tracking-wider">
-            MP4, MOV, MKV, WEBM, AVI • 500MB/FILE • SISA SLOT {sisa}
+            MP4, MOV, MKV, WEBM, AVI • SAMPAI {fmtSize(MAX_SIZE)}/FILE • SISA SLOT {sisa}
           </p>
         </div>
       </div>

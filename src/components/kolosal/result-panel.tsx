@@ -1,9 +1,18 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { JobPublic } from "@/lib/server/jobs";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Download, Loader2, CheckCircle2, AlertTriangle, Film } from "lucide-react";
+import {
+  Download,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  Film,
+  FolderOpen,
+  FolderCheck,
+} from "lucide-react";
 import { fmtDur } from "@/lib/video-config";
 import { HudCorners } from "@/components/kolosal/hud";
 
@@ -29,6 +38,12 @@ function downloadAll(job: JobPublic) {
 }
 
 export function ResultPanel({ job }: ResultPanelProps) {
+  // tombol buka folder hanya aktif di aplikasi desktop (Electron)
+  const [canOpenFolder, setCanOpenFolder] = useState(false);
+  useEffect(() => {
+    setCanOpenFolder(typeof window.kolosalAPI?.openPath === "function");
+  }, []);
+
   if (!job) return null;
 
   const processing = job.status === "queued" || job.status === "processing";
@@ -64,6 +79,31 @@ export function ResultPanel({ job }: ResultPanelProps) {
 
       {job.status === "done" && job.parts.length > 0 && (
         <>
+          {job.outDir && (
+            <div className="rounded-lg border border-emerald-300/25 bg-emerald-400/5 p-2.5 flex flex-col gap-1.5">
+              <p className="text-[11px] leading-snug break-all">
+                <FolderCheck
+                  className="inline w-3.5 h-3.5 text-emerald-300 mr-1 -mt-0.5"
+                  aria-hidden
+                />
+                <span className="text-emerald-200">Hasil tersimpan di:</span>{" "}
+                <span className="text-zinc-300">{job.outDir}</span>
+              </p>
+              {canOpenFolder && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-emerald-300/40 text-emerald-200 hover:bg-emerald-400/10 hover:border-emerald-300/60 font-tech tracking-wider text-xs"
+                  onClick={() => {
+                    void window.kolosalAPI?.openPath(job.outDir!);
+                  }}
+                >
+                  <FolderOpen className="w-4 h-4 mr-1.5" aria-hidden />
+                  BUKA FOLDER HASIL
+                </Button>
+              )}
+            </div>
+          )}
           <Button
             onClick={() => downloadAll(job)}
             className="w-full bg-gradient-to-r from-cyan-500 to-indigo-400 hover:from-cyan-400 hover:to-indigo-300 text-slate-950 font-semibold h-10 shadow-[0_0_20px_rgba(34,211,238,0.4)]"

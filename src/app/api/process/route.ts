@@ -64,6 +64,32 @@ export async function POST(req: NextRequest) {
     }
 
     const settings = sanitizeSettings(body.settings);
+
+    // ---- folder hasil pilihan pengguna (v1.2.0) ----
+    // Di versi desktop, path dipilih lewat dialog folder Windows (Electron IPC).
+    const wanted = typeof settings.outputDir === "string" ? settings.outputDir.trim() : "";
+    let outputDir: string | null = null;
+    if (wanted) {
+      if (!path.isAbsolute(wanted) || wanted.length > 500) {
+        return NextResponse.json(
+          { error: "Folder hasil tidak valid — gunakan path folder absolut." },
+          { status: 400 }
+        );
+      }
+      try {
+        await fs.mkdir(wanted, { recursive: true });
+        const probe = path.join(wanted, ".kolosal-tes-tulis");
+        await fs.writeFile(probe, "ok");
+        await fs.rm(probe, { force: true });
+      } catch {
+        return NextResponse.json(
+          { error: `Folder hasil tidak bisa ditulis: ${wanted}` },
+          { status: 400 }
+        );
+      }
+      outputDir = wanted;
+    }
+
     const jobId = randomUUID().replace(/-/g, "").slice(0, 10);
     await fs.mkdir(path.join(EXPORTS_DIR, jobId), { recursive: true });
 
@@ -81,6 +107,7 @@ export async function POST(req: NextRequest) {
       total: 0,
       parts: [],
       createdAt: Date.now(),
+      outDir: outputDir,
     };
     jobStore.set(jobId, job);
 

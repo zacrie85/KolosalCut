@@ -139,3 +139,19 @@ Work Log:
 Stage Summary:
 - Installer v1.1.1 mengantar server sebagai 1 zip + ekstraksi mandiri = tak tersentuh bug copier electron-builder
 - CI kini menolak rilis jika server hasil PAKETAN tidak menyala (regresi serupa tertangkap permanen)
+
+---
+Task ID: 6
+Agent: main (Z.ai)
+Task: v1.2.0 — impor 10GB + folder hasil pilihan user + fix split "melewati batas sampai ujung frame"
+
+Work Log:
+- Bug #3 (laporan user + screenshot): computeSegments membatasi 50 bagian — video 57:14 @ potongan 1 menit butuh 58 bagian, hanya 50 dibuat (50:00) -> 7:14 terakhir TIDAK terbagi, video "melewati batas sampai ujung frame" di timeline. Fix: bila count > 50 -> seluruh durasi dibagi rata 50 bagian (segDur=duration/50); ekor <0.5s digabung ke bagian terakhir; coverage dijamin = durasi penuh (uji 9 kasus lolos, scripts/test-segments.mjs). Timeline: lencana "TERBAGI HABIS" + notice amber saat pembagian rata aktif (prop notice)
+- Fitur #1 (10GB): upload lama = FormData + arrayBuffer (seluruh file ke RAM, batas 500MB). Baru: client XHR kirim File MENTAH sebagai body + header x-file-name (browser stream dari disk); server /api/upload Readable.fromWeb -> Transform counter (batas 10GB, batal + hapus sisa bila lewat) -> createWriteStream; MAX_SIZE 10GB di import-zone/upload-zone/upload-client; teks UI "SAMPAI 10GB/FILE"
+- Fitur #2 (folder hasil): Settings.outputDir (persist localStorage); electron/preload.js BARU (contextBridge kolosalAPI.selectOutputDir/openPath) + ipcMain.handle di main.js (dialog openDirectory createDirectory, defaultPath Videos) + preload didaftarkan di webPreferences + electron-builder.yml files += preload.js; /api/process validasi outputDir (absolute, mkdir, tes tulis) -> job.outDir; runJob resolveOutDir: <pilihan>/<Judul> unik (mkdir eksklusif, -2/-3 bila tabrak); thumbnail+tmp tetap di exports bawaan; /api/file menyaji video dari job.outDir (nama divalidasi keanggotaan job.parts); result-panel: kotak "Hasil tersimpan di" + tombol BUKA FOLDER HASIL (desktop); settings-panel Section 09 "Folder Hasil Render" (PILIH FOLDER HASIL…, RESET, status path)
+- Verifikasi lokal: tsc bersih di src utama; build OK (standalone 57.5MB, zip 18.7MB); smoke E2E (scripts/smoke-v120.mjs): upload streaming 28MB OK -> process dengan outputDir=/tmp/kc-test/hasil -> 2 bagian selesai -> 2 MP4 ada di folder pilihan, total durasi bagian 122s >= sumber 120s (fix #3 terbukti), thumbnail via /api/file OK, video dari outDir via /api/file OK
+- package.json 1.2.0; RELEASE_NOTES.md ditulis ulang (3 fitur + cara upgrade)
+
+Stage Summary:
+- v1.2.0: video sampai 10GB via streaming dua sisi (RAM aman), hasil render ditulis langsung ke folder pilihan user (subfolder per judul + BUKA FOLDER), split menjamin seluruh video terbagi habis (bug ekor 7:14 hilang)
+- Smoke test E2E baru (upload streaming + outputDir + coverage) siap dipakai ulang

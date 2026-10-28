@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Settings,
   LabelFormat,
@@ -43,6 +43,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
+  FolderOpen,
+  FolderCheck,
 } from "lucide-react";
 
 type SettingsTab = "video" | "teks" | "gaya";
@@ -285,6 +287,23 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
 
   const disabled = !hasVideo;
   const [tab, setTab] = useState<SettingsTab>("video");
+
+  // deteksi API desktop (Electron) untuk dialog pilih folder
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    setIsDesktop(Boolean(window.kolosalAPI?.selectOutputDir));
+  }, []);
+
+  const pickFolder = async () => {
+    const api = window.kolosalAPI;
+    if (!api?.selectOutputDir) return;
+    try {
+      const dir = await api.selectOutputDir();
+      if (dir) onChange({ outputDir: dir });
+    } catch {
+      /* pengguna membatalkan / dialog gagal — abaikan */
+    }
+  };
 
   /** pilihan font dengan contoh tulisan memakai font aslinya */
   const fontSelect = (
@@ -825,6 +844,56 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
           ))}
         </div>
         <p className="text-[11px] text-zinc-500">{QUALITY_INFO[s.quality].desc}</p>
+      </Section>
+
+      {/* ===== FOLDER HASIL RENDER (v1.2.0) ===== */}
+      <Section num="09" icon={<FolderOpen className="w-4 h-4" />} title="Folder Hasil Render">
+        <div className="flex gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            className={`h-8 flex-1 text-xs font-tech tracking-wider ${
+              isDesktop
+                ? "border-cyan-300/40 text-cyan-200 hover:bg-cyan-400/10 hover:border-cyan-300/60"
+                : "border-zinc-700 text-zinc-500"
+            }`}
+            onClick={pickFolder}
+          >
+            <FolderOpen className="w-4 h-4 mr-1.5" aria-hidden />
+            PILIH FOLDER HASIL…
+          </Button>
+          {s.outputDir && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-zinc-700 text-zinc-300 hover:text-red-300 hover:border-red-400/50 text-xs"
+              onClick={() => onChange({ outputDir: "" })}
+            >
+              <RotateCcw className="w-3.5 h-3.5" aria-hidden />
+              RESET
+            </Button>
+          )}
+        </div>
+        <p className="text-[11px] leading-snug break-all">
+          {s.outputDir ? (
+            <>
+              <FolderCheck
+                className="inline w-3.5 h-3.5 text-emerald-300 mr-1 -mt-0.5"
+                aria-hidden
+              />
+              <span className="text-emerald-200">Hasil disimpan ke:</span>{" "}
+              <span className="text-zinc-300">{s.outputDir}</span>
+            </>
+          ) : (
+            <span className="text-zinc-500">
+              Belum dipilih — hasil disimpan ke folder data bawaan aplikasi.
+            </span>
+          )}
+        </p>
+        <p className="text-[11px] text-zinc-600 leading-snug">
+          Setiap video mendapat subfolder sendiri sesuai judulnya. Tombol pilih folder aktif di
+          aplikasi Windows; di pratinjau browser hasil tetap tersimpan di folder bawaan.
+        </p>
       </Section>
       </>
       )}

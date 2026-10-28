@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { UploadZone, UploadResult } from "@/components/kolosal/upload-zone";
+import { UploadZone } from "@/components/kolosal/upload-zone";
 import { ImportZone, MAX_VIDEOS, MAX_SIZE } from "@/components/kolosal/import-zone";
+import { uploadVideo, fmtSize, type UploadResult } from "@/lib/upload-client";
 import { PreviewCanvas } from "@/components/kolosal/preview-canvas";
 import { SettingsPanel } from "@/components/kolosal/settings-panel";
 import { ResultPanel } from "@/components/kolosal/result-panel";
@@ -67,28 +68,9 @@ function fileUrl(jobId: string, name: string) {
   return `/api/file?job=${encodeURIComponent(jobId)}&name=${encodeURIComponent(name)}`;
 }
 
-/** unggah satu file dengan laporan progres (XHR) */
+/** unggah satu file dengan laporan progres (XHR streaming — aman untuk 10GB) */
 function uploadOne(file: File, onProgress: (pct: number) => void): Promise<UploadResult> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    const form = new FormData();
-    form.append("file", file);
-    xhr.open("POST", "/api/upload");
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 96));
-    };
-    xhr.onload = () => {
-      try {
-        const res = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300) resolve(res as UploadResult);
-        else reject(new Error(res.error ?? "Gagal mengunggah video."));
-      } catch {
-        reject(new Error("Respons server tidak valid."));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Koneksi terputus saat mengunggah."));
-    xhr.send(form);
-  });
+  return uploadVideo(file, onProgress);
 }
 
 const STATUS_META: Record<ItemStatus, { label: string; cls: string }> = {
@@ -124,6 +106,15 @@ export default function Home() {
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
+  // muat folder hasil yang tersimpan dari sesi sebelumnya
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("kolosalcut.outputDir");
+      if (saved) setSettings((s) => ({ ...s, outputDir: saved }));
+    } catch {
+      /* penyimpanan lokal tidak tersedia — abaikan */
+    }
+  }, []);
   useEffect(() => {
     selectedRef.current = selectedUid;
   }, [selectedUid]);
@@ -227,7 +218,7 @@ export default function Home() {
       if (skipped > 0) {
         toast({
           title: "Sebagian file dilewati",
-          description: `${skipped} file melebihi 500MB.`,
+          description: `${skipped} file melebihi batas ${fmtSize(MAX_SIZE)}.`,
           variant: "destructive",
         });
       }
@@ -346,6 +337,15 @@ export default function Home() {
 
   const onSettingsChange = useCallback((patch: Partial<Settings>) => {
     setSettings((s) => ({ ...s, ...patch }));
+    // folder hasil dipersist agar tidak hilang saat aplikasi ditutup
+    if (typeof patch.outputDir === "string") {
+      try {
+        if (patch.outputDir) localStorage.setItem("kolosalcut.outputDir", patch.outputDir);
+        else localStorage.removeItem("kolosalcut.outputDir");
+      } catch {
+        /* penyimpanan lokal tidak tersedia — abaikan */
+      }
+    }
   }, []);
 
   const applyToAll = useCallback(() => {
@@ -437,6 +437,19 @@ export default function Home() {
     [selected, settings]
   );
   const estParts = segs.length;
+
+  // pemberitahuan saat mode durasi melebihi 50 bagian: seluruh video dibagi rata
+  const splitNotice = useMemo(() => {
+    if (!selected?.info || settings.splitMode !== "duration") return "";
+    const dur = selected.info.duration;
+    const want = Math.ceil(dur / Math.max(3, Math.min(3600, settings.splitSeconds)) - 1e-6);
+    if (want <= 50) return "";
+    return (
+      `Video ${fmtDur(dur)} butuh ${want} bagian — melebihi batas 50. ` +
+      `Seluruh video otomatis dibagi rata menjadi 50 bagian (±${fmtDur(dur / 50)}) ` +
+      `supaya tidak ada bagian video yang terpotong.`
+    );
+  }, [selected?.info, settings.splitMode, settings.splitSeconds]);
 
   const selectPart = useCallback(
     (i: number) => {
@@ -542,6 +555,7 @@ export default function Home() {
               caption={settings.desc.text.trim() || settings.title.text.trim()}
               presetName={frameName}
               onPartSelect={selectPart}
+              notice={splitNotice}
             />
           </div>
 

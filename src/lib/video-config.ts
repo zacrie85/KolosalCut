@@ -201,7 +201,12 @@ export interface Settings {
   quality: QualityKey;
   /** jumlah video yang diproses serentak */
   parallel: ParallelKey;
+  /** folder penyimpanan hasil render & split (kosong = folder bawaan aplikasi) */
+  outputDir: string;
 }
+
+/** batas maksimal bagian per video */
+export const MAX_PARTS = 50;
 
 /** tinggi bar sinema (px pada kanvas 1080x1920) */
 export const BAR_H: Record<BarSize, number> = {
@@ -251,6 +256,7 @@ export const DEFAULT_SETTINGS: Settings = {
   zoom: 1,
   quality: "balanced",
   parallel: 5,
+  outputDir: "",
 };
 
 /** teks label untuk bagian ke-n, mis. "PART 1" */
@@ -356,10 +362,10 @@ function pickText(raw: unknown, def: TextElement): TextElement {
 
 /** validasi & normalisasi settings dari client */
 export function sanitizeSettings(raw: unknown): Settings {
-  const r = (raw ?? {}) as Partial<Settings>;
+  const r = (raw ?? {}) as Partial<Settings> & { preset?: unknown };
   const d = DEFAULT_SETTINGS;
   // preset lama (sinema/epik/dll) dipetakan ke gaya frame baru
-  const legacy = r.preset as string | undefined;
+  const legacy = typeof r.preset === "string" ? r.preset : undefined;
   const frameRaw = (r.frame ?? legacy) as FrameStyleKey | undefined;
   const frame: FrameStyleKey = FRAME_STYLES.some((f) => f.key === frameRaw)
     ? (frameRaw as FrameStyleKey)
@@ -395,6 +401,10 @@ export function sanitizeSettings(raw: unknown): Settings {
     parallel: PARALLEL_OPTIONS.includes(Number(r.parallel) as ParallelKey)
       ? (Number(r.parallel) as ParallelKey)
       : d.parallel,
+    outputDir:
+      typeof r.outputDir === "string"
+        ? r.outputDir.trim().slice(0, 500)
+        : d.outputDir,
   };
 }
 
@@ -413,19 +423,36 @@ export interface Segment {
   dur: number;
 }
 
-/** hitung potongan video berdasarkan mode split */
+/**
+ * Hitung potongan video berdasarkan mode split.
+ *
+ * JAMINAN PENTING (fix v1.2.0): jumlah durasi semua bagian = durasi penuh video.
+ * Sebelumnya, mode durasi pada video panjang (mis. 57:14 dengan potongan 1 menit
+ * butuh 58 bagian) dipotong pada batas 50 bagian sehingga 7:14 terakhir video
+ * tidak ikut terbagi — video "melewati batas sampai ke ujung frame".
+ * Kini jika melebihi batas, SELURUH video dibagi rata menjadi 50 bagian.
+ */
 export function computeSegments(duration: number, s: Settings): Segment[] {
   if (!isFinite(duration) || duration <= 0) return [];
-  const segDur =
+  let segDur =
     s.splitMode === "duration"
       ? clamp(s.splitSeconds, 3, 3600)
-      : clamp(duration / clamp(s.splitParts, 1, 50), 0.5, 3600);
-  const count = Math.min(50, Math.max(1, Math.ceil(duration / segDur - 0.03)));
+      : duration / clamp(s.splitParts, 1, MAX_PARTS);
+  let count = Math.ceil(duration / segDur - 1e-6);
+  if (count > MAX_PARTS) {
+    // batas bagian tercapai -> bagi rata supaya seluruh video tetap terbagi habis
+    count = MAX_PARTS;
+    segDur = duration / count;
+  }
   const segs: Segment[] = [];
   for (let i = 0; i < count; i++) {
     const start = i * segDur;
-    const dur = Math.min(segDur, duration - start);
-    if (dur >= 0.5) segs.push({ start, dur });
+    segs.push({ start, dur: Math.min(segDur, duration - start) });
+  }
+  // ekor tersisa yang terlalu pendek (<0,5 detik) digabung ke bagian terakhir
+  if (segs.length > 1 && segs[segs.length - 1].dur < 0.5) {
+    segs.pop();
+    segs[segs.length - 1].dur = duration - segs[segs.length - 1].start;
   }
   if (segs.length === 0) segs.push({ start: 0, dur: duration });
   return segs;
