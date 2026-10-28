@@ -20,9 +20,13 @@ extraResources:
   # Ikon untuk jendela aplikasi
   - from: build/icon.ico
     to: app.ico
-  # Server Next.js standalone hasil build + aset statisnya
-  - from: .next/standalone
-    to: app-standalone
+  # Server Next.js standalone — dikemas sebagai SATU file zip oleh scripts/post-build.mjs.
+  # PENTING (v1.1.1): electron-builder MENG-SKIP folder node_modules pada extraResources
+  # (walau diberi filter) -> penyebab MODULE_NOT_FOUND server.js:16 di v1.0.0 & v1.1.0.
+  # Dengan 1 file zip, copier electron-builder tidak pernah menyentuh node_modules;
+  # ekstraksi dilakukan electron/main.js saat aplikasi pertama kali dibuka.
+  - from: resources/app-standalone.zip
+    to: app-standalone.zip
 win:
   icon: build/icon.ico
   target:

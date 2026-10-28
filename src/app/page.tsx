@@ -477,6 +477,9 @@ export default function Home() {
             </p>
           </div>
           <div className="ml-auto hidden md:flex items-center gap-2">
+            <span className="font-tech text-[10px] tracking-wider rounded border border-teal-400/30 bg-teal-400/5 px-2.5 py-1.5 text-teal-200">
+              v{process.env.NEXT_PUBLIC_APP_VERSION || "dev"}
+            </span>
             <span className="font-tech text-[10px] tracking-wider rounded border border-cyan-300/30 bg-cyan-400/5 px-2.5 py-1.5 text-cyan-200 flex items-center gap-1.5">
               <span className="led w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" aria-hidden />
               9:16 • 1080×1920

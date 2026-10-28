@@ -64,3 +64,4 @@ upload/
 scripts/*.png
 scripts/*.jpg
 scripts/test-*.sh
+resources/app-standalone.zip

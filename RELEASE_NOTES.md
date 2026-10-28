@@ -1,51 +1,37 @@
-# KolosalCut v1.1.0
+# KolosalCut v1.1.1
 
-Pembaruan besar! **Perbaikan error aplikasi tidak bisa dibuka** + 4 fitur baru yang disempurnakan.
+Perbaikan pasti untuk error **"KolosalCut gagal dimulai (Server lokal tidak merespons)"** yang masih terjadi di v1.1.0.
 
-## Perbaikan
+## Akar Masalah (ditemukan & dibuktikan lewat reproduksi)
 
-- **Memperbaiki "KolosalCut gagal dimulai" (MODULE_NOT_FOUND)** — aplikasi kini berjalan mulus di Windows. Build sekarang diverifikasi otomatis: server diuji nyata sebelum installer dibuat, jadi masalah serupa tidak akan terulang.
+Pembungkus installer (electron-builder) **melewatkan folder `node_modules`** saat menyalin
+server aplikasi ke dalam installer — jadi di komputer kamu, aplikasi jalan tanpa modul inti
+(`next`) dan server langsung mati: `MODULE_NOT_FOUND` di `server.js:16`.
+Uji otomatis sebelumnya menguji salinan *sebelum* dikemas, sehingga cacat ini lolos di
+v1.0.0 maupun v1.1.0.
 
-## Fitur Baru
+## Solusi v1.1.1
 
-### 1. 7 Font Sinematik
-Pilihan font untuk judul, label part, dan deskripsi — semua tampil asli di pratinjau:
-**Anton** (poster epik), **Bebas Neue** (kapsul sinema), **Oswald** (modern tegas), **Montserrat Black** (bersih & tebal), **Playfair Display** (drama klasik), **Cinzel** (Hollywood retro), **Archivo Black** (kolosal kokoh) + Carlito standar.
-Pengaturan **ukuran font** per teks juga diperluas (24–120px).
+- **Server kini dibawa sebagai satu file ZIP** dan **diekstrak sendiri oleh aplikasi** saat pertama kali dibuka — tidak lagi melewati mekanisme penyalinan installer yang bermasalah.
+- **Gerbang uji baru di CI**: server hasil *paketan* kini dinyalakan dengan runtime Electron asli sebelum dirilis. Kalau gagal, installer tidak akan pernah terbit.
+- **Splash screen** "Menyiapkan server…" saat ekstraksi pertama (±5–10 detik, hanya sekali per versi).
+- **Versi aplikasi tampil di pojok kanan header** — pastikan tertulis **v1.1.1** setelah install.
+- Pesan error kini menyebut modul yang hilang + lokasi log, bila ada masalah lain.
+- Ukuran installer lebih ramping (server dikemas bersih tanpa berkas sisa).
 
-### 2. Gaya Frame Baru — Neon & Minimalis
-Seluruh gaya frame lama diganti:
-- **Neon Emas** — cahaya emas berputar mengelilingi frame 9:16
-- **Neon Ganda** — dua komet neon cyan & magenta
-- **Neon Pelangi** — cahaya warna-warni penuh energi
-- **Minimal Putih / Emas / Sudut / Garis** — layer minimalis elegan untuk video Anda
+## Cara Upgrade
 
-Pratinjau menampilkan animasi neon asli sebelum render.
-
-### 3. Render Paralel
-Proses **1, 3, 5, atau 7 video sekaligus** secara serentak — atur di tab Video → Proses Paralel.
-
-### 4. Impor Batch Hingga 50 Video
-- Impor **50 video sekaligus** (drag & drop atau pilih file)
-- Video diproses **berurutan dari video pertama sampai terakhir** sesuai slot paralel
-- Tombol **"Terapkan Setelan ke Semua"** — setel video pertama, terapkan gaya yang sama ke seluruh antrean (judul tetap otomatis dari nama file masing-masing)
+1. **Uninstall** KolosalCut lama (Settings → Apps → KolosalCut → Uninstall).
+2. Unduh **`KolosalCut-Setup-1.1.1.exe`** di bawah.
+3. Jika SmartScreen muncul: **More info → Run anyway**.
+4. Install & buka — layar "Menyiapkan server…" muncul sebentar, lalu aplikasi terbuka.
 
 ## Isi Rilis
 
 | Berkas | Keterangan |
 |---|---|
-| `KolosalCut-Setup-1.1.0.exe` | Installer Windows (disarankan) |
-| `KolosalCut-Portable-1.1.0.exe` | Versi portabel tanpa instalasi |
-
-## Cara Install
-
-1. Unduh `KolosalCut-Setup-1.1.0.exe` di bawah.
-2. Jika SmartScreen muncul (*"Windows protected your PC"*), klik **More info → Run anyway**.
-3. Install & buka **KolosalCut** dari desktop.
-
-## Upgrade dari v1.0.0
-
-Cukup install versi baru di atas versi lama (installer akan mengganti otomatis).
+| `KolosalCut-Setup-1.1.1.exe` | Installer Windows (disarankan) |
+| `KolosalCut-Portable-1.1.1.exe` | Versi portabel tanpa instalasi |
 
 ## Persyaratan Sistem
 

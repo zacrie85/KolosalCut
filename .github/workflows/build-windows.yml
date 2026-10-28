@@ -24,9 +24,9 @@ jobs:
 
       - name: Instal dependensi (npm ci)
         run: npm ci
-        env:
-          # lewati unduh binary electron — electron-builder mengunduh versinya sendiri
-          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+      - name: Pastikan binary Electron tersedia (untuk uji runtime paketan)
+        run: node node_modules/electron/install.js
 
       - name: Unduh FFmpeg & FFprobe (build Windows)
         shell: pwsh
@@ -72,6 +72,10 @@ jobs:
 
       - name: Paket instalasi Windows (Electron Builder)
         run: npx electron-builder --win nsis portable --publish never
+
+      - name: Uji server HASIL PAKETAN via runtime Electron (gerbang anti MODULE_NOT_FOUND)
+        shell: pwsh
+        run: node scripts/test-packaged-server.mjs
 
       - name: Baca versi aplikasi
         id: ver

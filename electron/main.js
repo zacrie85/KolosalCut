@@ -1,27 +1,41 @@
 /**
  * KolosalCut — Electron main process (versi desktop Windows).
  *
- * Alur kerja:
+ * Alur kerja (v1.1.1):
  *  1. Mencari port bebas di localhost.
- *  2. Menjalankan server Next.js (build standalone) sebagai proses anak
- *     menggunakan runtime Node milik Electron (ELECTRON_RUN_AS_NODE=1).
- *  3. Mengarahkan FFmpeg/FFprobe/font ke binary yang dibundel di resources.
- *  4. Membuka jendela desktop yang memuat antarmuka aplikasi.
+ *  2. Menyiapkan "runtime server": mengekstrak resources/app-standalone.zip
+ *     (dibuat oleh scripts/post-build.mjs) ke folder data pengguna.
+ *     -> Ekstraksi mandiri ini menghindari bug electron-builder yang
+ *        meng-skip folder node_modules pada extraResources
+ *        (penyebab MODULE_NOT_FOUND v1.0.0 & v1.1.0).
+ *  3. Menjalankan server Next.js standalone sebagai proses anak memakai
+ *     runtime Node milik Electron (ELECTRON_RUN_AS_NODE=1).
+ *  4. Mengarahkan FFmpeg/FFprobe/font/overlay ke binary yang dibundel.
+ *  5. Membuka jendela desktop yang memuat antarmuka aplikasi.
  */
 const { app, BrowserWindow, dialog, Menu, shell } = require("electron");
 const { spawn } = require("child_process");
 const net = require("net");
 const path = require("path");
 const fs = require("fs");
+const AdmZip = require("adm-zip");
 
+const APP_VERSION = app.getVersion();
 let serverProc = null;
 let mainWindow = null;
+let splashWin = null;
 let quitting = false;
 
-const APP_DIR = path.join(process.resourcesPath, "app-standalone");
-const SERVER_JS = path.join(APP_DIR, "server.js");
+const ZIP_PATH = path.join(process.resourcesPath, "app-standalone.zip");
 const BIN_DIR = path.join(process.resourcesPath, "bin");
 const FONT_DIR = path.join(process.resourcesPath, "fonts");
+
+// Runtime server diekstrak ke folder data pengguna (selalu bisa ditulis,
+// tidak tergantung hak akses Program Files, dan bersih antar versi)
+const RUNTIME_DIR = path.join(app.getPath("userData"), "server-runtime");
+const APP_DIR = path.join(RUNTIME_DIR, "app-standalone");
+const SERVER_JS = path.join(APP_DIR, "server.js");
+const VERSION_MARKER = path.join(RUNTIME_DIR, ".kolosal-version");
 
 function logLine(msg) {
   try {
@@ -35,17 +49,128 @@ function logLine(msg) {
   }
 }
 
+function logPath() {
+  try {
+    return path.join(app.getPath("userData"), "kolosalcut.log");
+  } catch {
+    return "(tidak tersedia)";
+  }
+}
+
 function readLogTail() {
   try {
-    const p = path.join(app.getPath("userData"), "kolosalcut.log");
-    return fs
-      .readFileSync(p, "utf8")
-      .split("\n")
-      .slice(-15)
-      .join("\n");
+    const p = logPath();
+    return fs.readFileSync(p, "utf8").split("\n").slice(-15).join("\n");
   } catch {
     return "(log tidak tersedia)";
   }
+}
+
+/** Ambil nama modul yang hilang dari pesan error Node (jika ada) */
+function missingModuleFrom(text) {
+  const m = text.match(/Cannot find module ['"]([^'"]+)['"]/);
+  return m ? m[1] : null;
+}
+
+/** Dialog error dengan konteks versi + lokasi log agar mudah dilaporkan */
+function showFatal(message, extraLog) {
+  const detail =
+    `${message}\n\n` +
+    (extraLog ? extraLog + "\n\n" : "") +
+    `Versi aplikasi : ${APP_VERSION}\n` +
+    `Berkas log     : ${logPath()}\n\n` +
+    `Log terakhir:\n${readLogTail()}`;
+  logLine("[FATAL] " + message);
+  dialog.showErrorBox(`KolosalCut gagal dimulai (v${APP_VERSION})`, detail);
+}
+
+function showSplash(text) {
+  splashWin = new BrowserWindow({
+    width: 440,
+    height: 220,
+    frame: false,
+    resizable: false,
+    alwaysOnTop: true,
+    show: false,
+    backgroundColor: "#060a14",
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  splashWin.once("ready-to-show", () => splashWin.show());
+  const body = String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  splashWin.loadURL(
+    "data:text/html;charset=utf-8," +
+      encodeURIComponent(
+        `<!doctype html><html><head><meta charset="utf-8"><style>
+        html,body{margin:0;height:100%;background:#060a14;display:flex;flex-direction:column;
+        align-items:center;justify-content:center;font-family:system-ui,'Segoe UI',sans-serif;color:#e2f5ff}
+        h1{font-size:17px;letter-spacing:.14em;margin:0 0 14px}
+        h1 b{background:linear-gradient(90deg,#22d3ee,#818cf8);-webkit-background-clip:text;background-clip:text;color:transparent}
+        .spin{width:34px;height:34px;border:3px solid rgba(34,211,238,.2);border-top-color:#22d3ee;
+        border-radius:50%;animation:s .8s linear infinite}
+        @keyframes s{to{transform:rotate(360deg)}}
+        p{font-size:12px;color:#7dd3fc;opacity:.75;margin:14px 0 0;letter-spacing:.06em}
+        </style></head><body>
+        <h1>KOLOSAL<b>CUT</b> <span style="font-size:11px;color:#5eead4">v${APP_VERSION}</span></h1>
+        <div class="spin"></div><p>${body}</p>
+        </body></html>`
+      )
+  );
+}
+
+function closeSplash() {
+  if (splashWin && !splashWin.isDestroyed()) splashWin.close();
+  splashWin = null;
+}
+
+/**
+ * Siapkan runtime server: ekstrak zip jika versi berubah / belum ada.
+ * Melempar Error dengan pesan jelas jika berkas kritis tidak ditemukan.
+ */
+function prepareRuntime() {
+  if (!fs.existsSync(ZIP_PATH)) {
+    throw new Error(
+      "Berkas runtime tidak ditemukan dalam instalasi:\n" + ZIP_PATH +
+      "\n\nKemungkinan installer tidak lengkap — unduh ulang KolosalCut-Setup dari halaman rilis GitHub."
+    );
+  }
+
+  let needExtract = true;
+  if (fs.existsSync(VERSION_MARKER) && fs.existsSync(SERVER_JS)) {
+    const current = fs.readFileSync(VERSION_MARKER, "utf8").trim();
+    needExtract = current !== APP_VERSION;
+  }
+  if (fs.existsSync(SERVER_JS) && !fs.existsSync(path.join(APP_DIR, "node_modules"))) {
+    needExtract = true; // hasil ekstraksi lama rusak/tidak lengkap -> paksa ulang
+  }
+
+  if (needExtract) {
+    logLine(`Mengekstrak runtime server v${APP_VERSION} ke ${RUNTIME_DIR}`);
+    fs.rmSync(APP_DIR, { recursive: true, force: true });
+    fs.mkdirSync(RUNTIME_DIR, { recursive: true });
+    const zip = new AdmZip(ZIP_PATH);
+    zip.extractAllTo(RUNTIME_DIR, true);
+    fs.writeFileSync(VERSION_MARKER, APP_VERSION, "utf8");
+    logLine("Ekstraksi runtime selesai");
+  }
+
+  // Pre-flight: pastikan bagian kritis benar-benar ada sebelum spawn
+  const checks = [
+    [SERVER_JS, "server.js"],
+    [path.join(APP_DIR, "node_modules", "next", "package.json"), "paket next (node_modules)"],
+    [path.join(APP_DIR, ".next"), "berkas build .next"],
+  ];
+  for (const [p, label] of checks) {
+    if (!fs.existsSync(p)) {
+      throw new Error(
+        `Berkas runtime tidak lengkap: ${label} hilang.\nDiharapkan di: ${p}\n\n` +
+        "Coba hapus folder berikut lalu buka aplikasi lagi:\n" + RUNTIME_DIR
+      );
+    }
+  }
+  logLine("Runtime siap (v" + APP_VERSION + "): " + APP_DIR);
 }
 
 function getFreePort() {
@@ -105,22 +230,31 @@ function startServer(port) {
   serverProc.stdout.on("data", (d) =>
     logLine("[server] " + d.toString().trim())
   );
-  serverProc.stderr.on("data", (d) =>
-    logLine("[server:err] " + d.toString().trim())
-  );
+  serverProc.stderr.on("data", (d) => {
+    const text = d.toString().trim();
+    logLine("[server:err] " + text);
+    lastServerErr = text;
+  });
   serverProc.on("exit", (code) => {
     logLine("Server keluar dengan kode " + code);
     serverProc = null;
     if (!quitting && mainWindow && !mainWindow.isDestroyed()) {
+      const missing = missingModuleFrom(lastServerErr || "");
       dialog.showErrorBox(
         "KolosalCut",
-        "Proses server lokal berhenti tidak terduga. Silakan buka kembali aplikasi."
+        "Proses server lokal berhenti tidak terduga." +
+          (missing
+            ? `\n\nModul hilang: ${missing}`
+            : "") +
+          `\n\nVersi: ${APP_VERSION}\nLog: ${logPath()}`
       );
       app.quit();
     }
   });
   return serverProc;
 }
+
+let lastServerErr = "";
 
 function createWindow(port) {
   mainWindow = new BrowserWindow({
@@ -141,7 +275,10 @@ function createWindow(port) {
   });
   Menu.setApplicationMenu(null);
 
-  mainWindow.once("ready-to-show", () => mainWindow.show());
+  mainWindow.once("ready-to-show", () => {
+    closeSplash();
+    mainWindow.show();
+  });
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -198,20 +335,20 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     try {
-      if (!fs.existsSync(SERVER_JS)) {
-        throw new Error("Berkas server tidak ditemukan: " + SERVER_JS);
-      }
+      showSplash("Menyiapkan server lokal…");
       const port = await getFreePort();
-      logLine("Memulai server di port " + port);
+      logLine(`KolosalCut v${APP_VERSION} — memulai server di port ${port}`);
+      prepareRuntime();
       startServer(port);
-      await waitForPort(port);
+      await waitForPort(port, 120000); // ekstraksi pertama bisa memakan waktu
+      closeSplash();
       createWindow(port);
     } catch (err) {
-      dialog.showErrorBox(
-        "KolosalCut gagal dimulai",
-        String((err && err.message) || err) +
-          "\n\nLog terakhir:\n" +
-          readLogTail()
+      closeSplash();
+      const missing = missingModuleFrom(String((err && err.stack) || err) + "\n" + lastServerErr);
+      showFatal(
+        (err && err.message) || String(err),
+        missing ? `Modul yang tidak ditemukan: ${missing}` : null
       );
       app.quit();
     }
@@ -224,6 +361,7 @@ if (!gotLock) {
 
   app.on("before-quit", () => {
     quitting = true;
+    closeSplash();
     if (serverProc) {
       try {
         serverProc.kill();

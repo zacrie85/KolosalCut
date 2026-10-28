@@ -123,3 +123,19 @@ Stage Summary:
 - Release: https://github.com/zacrie85/KolosalCut/releases/tag/v1.1.0 (Setup 388.5 MB + Portable 346.2 MB)
 - Semua 5 permintaan user selesai: fix buka aplikasi, 7 font + ukuran, frame neon berputar + 4 minimalis, paralel 1/3/5/7, impor 50 video + terapkan setelan
 - Smoke test runtime standalone kini bagian tetap CI -> regresi packaging tertangkap otomatis
+
+---
+Task ID: 5
+Agent: main (Z.ai)
+Task: Fix FINAL error "KolosalCut gagal dimulai" (v1.1.0 masih error sama) — akar masalah sesungguhnya
+
+Work Log:
+- Reproduksi lokal: electron-builder --dir membuktikan extraResources MENG-SKIP folder node_modules (85MB paket tanpa node_modules; .next/standalone repo punya 72MB) — berlaku walau diberi filter eksplisit; smoke test CI lama menguji salinan PRE-package sehingga cacat ini lolos v1.0.0 & v1.1.0; server.js:16 = require('next') = persis error user
+- Solusi: post-build.mjs kini membuat staging whitelist (server.js, package.json, node_modules, .next, public — tanpa .env/sampah tracing) lalu mengemas app-standalone.zip (26.1MB, archiver level 9); electron-builder hanya menyalin 1 file zip; electron/main.js mengekstrak zip sendiri ke userData/server-runtime (marker versi, ekstrak ulang saat versi ganti) + splash "Menyiapkan server…" + pre-flight check (server.js, node_modules/next, .next) + dialog error memuat versi/modul hilang/lokasi log
+- Gerbang CI baru scripts/test-packaged-server.mjs: ekstrak zip hasil paketan -> spawn dengan ELECTRON_RUN_AS_NODE (Node Electron asli) -> curl 200; workflow: hapus ELECTRON_SKIP_BINARY_DOWNLOAD + step electron/install.js + step uji paketan
+- next.config.ts env NEXT_PUBLIC_APP_VERSION; chip versi di header UI (bukti versi benar berjalan); package.json v1.1.1; npm install (adm-zip prod, archiver dev) -> package-lock sinkron
+- Verifikasi lokal: server hasil PAKETAN via runtime Electron "Ready in 57ms" HTTP 200; zip bersih (tanpa .env; node_modules/next ada); lint 0 error
+
+Stage Summary:
+- Installer v1.1.1 mengantar server sebagai 1 zip + ekstraksi mandiri = tak tersentuh bug copier electron-builder
+- CI kini menolak rilis jika server hasil PAKETAN tidak menyala (regresi serupa tertangkap permanen)
