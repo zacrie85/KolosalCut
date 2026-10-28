@@ -1,3 +1,21 @@
+# KolosalCut v1.2.1
+
+Perbaikan tampilan timeline: **tombol bagian (P1–P50) tidak lagi meluber keluar panel ke menu lain** — persis masalah pada laporanmu saat memproses film 2 jam menjadi 50 bagian.
+
+## Perbaikan: Timeline Tidak Meluber ke Menu Lagi
+
+- **Nama masalahnya**: *overflow* — elemen UI melebihi batas wadahnya. Sebelumnya, 50 tombol bagian dipaksa muat satu baris (±1.700 px) padahal panel hanya ±900 px, sehingga tombol-tombol itu menembus sisi kanan panel timeline dan menutupi menu lain (Terapkan Setelan / Proses).
+- **Kini** daftar bagian tinggal di dalam panelnya dan bisa **digulir ke samping** (scroll) bila jumlah bagian banyak:
+  - Scroll mouse / trackpad, atau geser langsung daftar tombolnya.
+  - Tombol panah ‹ › di tepi kiri-kanan muncul otomatis saat daftar bisa digulir.
+  - Bagian yang kamu pilih **otomatis digulir ke tengah** — tidak perlu berburu tombol P40 di antara 50 bagian.
+  - Ruler waktu & playhead ikut menggulir, jadi selalu sejajar dengan klip.
+- Untuk video sedikit bagian (mis. 5–10 bagian), tampilan tetap sama persis seperti dulu — memenuhi lebar panel.
+
+> Catatan: film 2:00:20 yang butuh 121 bagian tetap dibagi rata menjadi 50 bagian (±2:24/bagian) sesuai perbaikan v1.2.0 — tidak ada bagian video yang terlewat.
+
+---
+
 # KolosalCut v1.2.0
 
 Tiga fitur besar hasil masukan kamu: **impor video sampai 10 GB**, **pilih sendiri folder hasil render**, dan **perbaikan penting pembagian video** — kini tidak ada lagi bagian video yang terlewat di ujung.
@@ -33,16 +51,16 @@ Ada cacat tersembunyi pada pembagian video panjang — persis seperti pada lapor
 ## Cara Upgrade
 
 1. **Uninstall** KolosalCut lama (Settings → Apps → KolosalCut → Uninstall).
-2. Unduh **`KolosalCut-Setup-1.2.0.exe`** di bawah.
+2. Unduh **`KolosalCut-Setup-1.2.1.exe`** di bawah.
 3. Jika SmartScreen muncul: **More info → Run anyway**.
-4. Install & buka — pastikan di pojok kanan header tertulis **v1.2.0**.
+4. Install & buka — pastikan di pojok kanan header tertulis **v1.2.1**.
 
 ## Isi Rilis
 
 | Berkas | Keterangan |
 |---|---|
-| `KolosalCut-Setup-1.2.0.exe` | Installer Windows (disarankan) |
-| `KolosalCut-Portable-1.2.0.exe` | Versi portabel tanpa instalasi |
+| `KolosalCut-Setup-1.2.1.exe` | Installer Windows (disarankan) |
+| `KolosalCut-Portable-1.2.1.exe` | Versi portabel tanpa instalasi |
 
 ## Persyaratan Sistem
 

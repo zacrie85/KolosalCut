@@ -1,6 +1,6 @@
 {
   "name": "kolosalcut",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Aplikasi desktop untuk memotong & memecah video menjadi bagian reel sinematik (cover, judul, label part, deskripsi, frame neon).",
   "author": "zacrie85",

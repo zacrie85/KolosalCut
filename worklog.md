@@ -155,3 +155,18 @@ Work Log:
 Stage Summary:
 - v1.2.0: video sampai 10GB via streaming dua sisi (RAM aman), hasil render ditulis langsung ke folder pilihan user (subfolder per judul + BUKA FOLDER), split menjamin seluruh video terbagi habis (bug ekor 7:14 hilang)
 - Smoke test E2E baru (upload streaming + outputDir + coverage) siap dipakai ulang
+
+---
+Task ID: 7
+Agent: main (Z.ai)
+Task: v1.2.1 — fix overflow UI timeline: tombol bagian (P1-P50) meluber keluar panel ke menu lain
+
+Work Log:
+- Laporan user + screenshot: film 2:00:20 dibagi 50 bagian, tombol P1-P50 menembus sisi kanan panel timeline hingga menutupi menu "Terapkan Setelan / Proses". Nama masalah: overflow (elemen flex melebihi wadah; 50 x min-w-30px + gap = ~1700px vs panel ~900px, tanpa induk overflow)
+- timeline.tsx: strip klip dipindah ke wadah scroll horizontal (kolosal-scroll, overflow-x-auto) + konten w-max min-w-full; ruler waktu & playhead ikut di dalam wadah gulir agar selalu sejajar dengan klip; section glass diberi overflow-hidden sebagai jaring pengaman
+- UX: auto-scroll smooth ke part aktif saat partNum berubah (center-align via offsetLeft); tombol panah chevron kiri/kanan muncul otomatis hanya saat daftar bisa digulir (state edge via onScroll + ResizeObserver); tepi pudar gradient sebagai hint visual; pt-3 pb-2 agar playhead & diamond part aktif tidak terpotong overflow-y-hidden
+- Verifikasi: eslint timeline.tsx bersih; npm run build sukses (standalone 57.5MB, app-standalone.zip 18.7MB)
+- package.json 1.2.1 (NEXT_PUBLIC_APP_VERSION otomatis ikut); RELEASE_NOTES.md ditulis ulang (v1.2.1 di atas, v1.2.0 dipertahankan)
+
+Stage Summary:
+- Banyak bagian sekalipun (50) tetap berada di dalam panel timeline-nya: bisa digulir + auto-center ke part aktif; tampilan sedikit bagian tidak berubah
