@@ -1,3 +1,38 @@
+# KolosalCut v1.3.2
+
+Perbaikan render: **judul video kini selalu tampil di cover** (tidak ada lagi cover yang hanya bertuliskan "PART 1"), teks judul panjang kini terbungkus rapi persis seperti pratinjau, dan durasi hasil kini **persis sesuai setelan** (tidak ada lagi 2 detik ekstra membeku di ujung tiap bagian).
+
+## Perbaikan 1: Judul Tampil Selalu di Cover
+
+- Sebelumnya, bila teks judul kosong saat render, cover tampil **tanpa judul sama sekali** — hanya label "PART 1". Kini judul kosong otomatis diisi dari **nama file video**, jadi cover selalu punya judul.
+- Toggle "Tampilkan judul" tetap dihormati — bila dimatikan, memang tanpa judul.
+
+## Perbaikan 2: Bungkus Teks Sama Persis dengan Pratinjau
+
+- Sebelumnya pratinjau menampilkan judul panjang terbungkus beberapa baris rata tengah, tetapi hasil render menggambarnya **satu baris super panjang** melintang layar. Keduanya kini memakai aturan bungkus yang sama (maks. 6 baris, rata tengah) — apa yang terlihat di pratinjau = apa yang jadi di video.
+
+## Perbaikan 3: Durasi Hasil Persis Sesuai Setelan
+
+- Sebelumnya tiap bagian hasil **lebih panjang 2 detik** dari seharusnya: cover membeku 1 detik ekstra di akhir, dan isi video membeku 1 detik ekstra di ujung (contoh: setelan cover 2 dtk + potongan 60 dtk menghasilkan file 64 dtk). Penyebabnya filter overlay yang memperpanjang durasi output mengikuti input overlay yang sengaja dibuat lebih panjang.
+- Kini cover berhenti persis di durasi cover dan tiap bagian berhenti persis di titik potong — penjumlahan durasi semua bagian = durasi video sumber + cover.
+- Bonus: indikator progres render kini berjalan mulus sampai 100% tanpa "menggantung" di akhir.
+
+## Cara Upgrade
+
+1. **Uninstall** KolosalCut lama (Settings → Apps → KolosalCut → Uninstall).
+2. Unduh & install **`KolosalCut-Setup-1.3.2.exe`** (di bawah).
+3. Jika SmartScreen muncul: **More info → Run anyway**.
+4. Buka aplikasi — pastikan header tertulis **v1.3.2**.
+
+## Isi Rilis
+
+| Berkas | Keterangan |
+|---|---|
+| `KolosalCut-Setup-1.3.2.exe` | Installer Windows (disarankan) |
+| `KolosalCut-Portable-1.3.2.exe` | Versi portabel tanpa instalasi |
+
+---
+
 # KolosalCut v1.3.1
 
 Perbaikan penting: **impor "PILIH BEBERAPA VIDEO SEKALIGUS" kini benar-benar mengunggah** — tidak lagi mentok di status MENGUNGGAH 0%.

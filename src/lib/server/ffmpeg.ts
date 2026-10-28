@@ -11,6 +11,8 @@ import {
   labelWordFor,
   computeSegments,
   sanitizeFile,
+  wrapText,
+  maxCharsFor,
   BAR_H,
   QualityKey,
 } from "@/lib/video-config";
@@ -170,7 +172,8 @@ function textFilters(
   s: Settings,
   partNum: number,
   tmpDir: string,
-  isCover: boolean
+  isCover: boolean,
+  jobTitle: string
 ): string {
   const parts: string[] = [];
   const add = (
@@ -183,10 +186,13 @@ function textFilters(
     if (!text) return;
     const file = path.join(tmpDir, `txt_${style}_${isCover ? "c" : "p"}${partNum}.txt`);
     // ditulis sinkron oleh pemanggil sebelum ffmpeg dijalankan
+    // (isi berkas sudah word-wrap konsisten dgn pratinjau — lihat runJob)
     const px = Math.round(el.size);
     const bw = Math.max(2, Math.round(px * 0.055));
     const ls = Math.round(px * 0.32);
-    let opts = `drawtext=fontfile='${escFilterPath(fontFile(el.font))}':textfile='${escFilterPath(file)}':fontsize=${px}:line_spacing=${ls}`;
+    // text_align=C: tiap baris teks multi-baris dipusatkan di blok —
+    // sama seperti pratinjau kanvas (lx = cx - lw/2 per baris)
+    let opts = `drawtext=fontfile='${escFilterPath(fontFile(el.font))}':textfile='${escFilterPath(file)}':fontsize=${px}:line_spacing=${ls}:text_align=C`;
     if (style === "title") {
       opts += `:fontcolor=white:borderw=${bw}:bordercolor=black@0.85:shadowx=2:shadowy=3:shadowcolor=black@0.45`;
     } else if (style === "label") {
@@ -199,7 +205,10 @@ function textFilters(
     if (isCover) opts += `:alpha='min(1,t/0.6)'`;
     parts.push(opts);
   };
-  add(s.title, "title");
+  // FALLBACK JUDUL (v1.3.2): bila teks judul kosong (mis. hasil impor yang
+  // tidak mengisi teks), pakai judul job (dari nama file) agar cover tidak
+  // tampil tanpa judul. Toggle "Tampilkan judul" tetap dihormati.
+  add(s.title, "title", s.title.text.trim() || jobTitle.trim());
   add(s.label, "label", labelTextFor(s, partNum));
   add(s.desc, "desc");
   return parts.length ? "," + parts.join(",") : "";
@@ -280,8 +289,8 @@ async function encodePart(
 
   const g: string[] = [];
   const bars = barsFilter(s);
-  const texts = textFilters(s, partNum, tmpDir, false);
-  const textsC = coverOn ? textFilters(s, partNum, tmpDir, true) : "";
+  const texts = textFilters(s, partNum, tmpDir, false, job.title);
+  const textsC = coverOn ? textFilters(s, partNum, tmpDir, true, job.title) : "";
 
   // ---- cabang video utama ----
   // posisi horizontal ambil gambar: 0 = kiri, 0.5 = tengah, 1 = kanan
@@ -312,7 +321,10 @@ async function encodePart(
 
   // ---- lapisan frame neon/minimalis lalu teks ----
   if (frameOn) {
-    g.push(`[pv0][${ovMain}:v]overlay=0:0[pv1]`);
+    // shortest=1 (v1.3.2): input overlay dibuat lebih panjang 1 detik dgn -t,
+    // tanpa shortest framesync memperpanjang output sampai overlay habis ->
+    // frame terakhir video utama "membeku" 1 detik ekstra di tiap bagian.
+    g.push(`[pv0][${ovMain}:v]overlay=0:0:shortest=1[pv1]`);
     g.push(`[pv1]null${texts}[pv]`);
   } else {
     g.push(`[pv0]null${texts}[pv]`);
@@ -327,7 +339,8 @@ async function encodePart(
         `setsar=1${bars}[cv0]`
     );
     if (frameOn) {
-      g.push(`[cv0][${ovCover}:v]overlay=0:0[cv1]`);
+      // shortest=1: sama seperti cabang utama — cover berhenti persis di coverDuration
+      g.push(`[cv0][${ovCover}:v]overlay=0:0:shortest=1[cv1]`);
       g.push(`[cv1]null${textsC}[cv]`);
     } else {
       g.push(`[cv0]null${textsC}[cv]`);
@@ -448,20 +461,28 @@ export async function runJob(job: Job): Promise<void> {
 
     // tulis file teks persis sesuai pola yang dirujuk textFilters:
     // txt_{title|label|desc}_{p|c}{n}.txt (p = bagian utama, c = cover)
+    // v1.3.2: isi berkas di-word-wrap seperti pratinjau (wrapText + maxCharsFor)
+    // supaya render multi-barisnya identik dgn kanvas pratinjau; judul kosong
+    // di-fallback ke judul job (dari nama file) agar tidak hilang di cover.
+    const jobTitle = job.title.trim();
     for (let i = 0; i < segs.length; i++) {
       const n = i + 1;
       const label = labelTextFor(s, n);
-      if (s.title.enabled && s.title.text.trim()) {
-        await writeTextFile(tmpDir, `txt_title_p${n}.txt`, s.title.text);
-        await writeTextFile(tmpDir, `txt_title_c${n}.txt`, s.title.text);
+      const titleText = s.title.enabled ? s.title.text.trim() || jobTitle : "";
+      if (titleText) {
+        const wrapped = wrapText(titleText, maxCharsFor(s.title.size)).join("\n");
+        await writeTextFile(tmpDir, `txt_title_p${n}.txt`, wrapped);
+        await writeTextFile(tmpDir, `txt_title_c${n}.txt`, wrapped);
       }
       if (label.trim()) {
-        await writeTextFile(tmpDir, `txt_label_p${n}.txt`, label);
-        await writeTextFile(tmpDir, `txt_label_c${n}.txt`, label);
+        const wl = wrapText(label, maxCharsFor(s.label.size)).join("\n");
+        await writeTextFile(tmpDir, `txt_label_p${n}.txt`, wl);
+        await writeTextFile(tmpDir, `txt_label_c${n}.txt`, wl);
       }
       if (s.desc.enabled && s.desc.text.trim()) {
-        await writeTextFile(tmpDir, `txt_desc_p${n}.txt`, s.desc.text);
-        await writeTextFile(tmpDir, `txt_desc_c${n}.txt`, s.desc.text);
+        const wd = wrapText(s.desc.text.trim(), maxCharsFor(s.desc.size)).join("\n");
+        await writeTextFile(tmpDir, `txt_desc_p${n}.txt`, wd);
+        await writeTextFile(tmpDir, `txt_desc_c${n}.txt`, wd);
       }
     }
 
