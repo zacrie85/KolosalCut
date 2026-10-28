@@ -1,3 +1,32 @@
+# KolosalCut v1.3.0
+
+Fitur baru di menu **07 Rasio & Zoom**: slider **AMBIL BAGIAN** — geser kiri ↔ kanan untuk menentukan **bagian mana dari video yang diambil** saat di-zoom / dipotong ke 9:16.
+
+## Slider Baru: "Ambil Bagian" (Kiri ↔ Kanan)
+
+- Ada di **menu 07 Rasio & Zoom**, persis di bawah slider Zoom — geser dari **KIRI (0%)** ke **KANAN (100%)**, tengah = **50%**.
+- **9:16 Penuh**: film layar lebar (16:9) harus dipotong agar muat 9:16 — sebelumnya selalu bagian **tengah** yang diambil. Sekarang kamu yang menentukan: geser ke kiri untuk mengambil aksi di sisi kiri layar, geser ke kanan untuk sisi kanan.
+- **9:16 Biasa + Blur**: geser untuk memindahkan posisi video ke kiri/kanan di antara latar blur — pas untuk komposisi takarir. Saat di-zoom (>1×), slider menjadi titik ambil bagian yang tetap terlihat.
+- **Pratinjau langsung**: geser slidernya, monitor pratinjau langsung mengikuti — apa yang kamu lihat = apa yang dirender.
+- Berlaku juga untuk tombol **TERAPKAN SETELAN KE SEMUA** — posisi ambil tersalin ke semua video antrean.
+- Nilai bawaan **Tengah (50%)** = perilaku lama, jadi setelan lama kamu tidak berubah.
+
+## Cara Upgrade
+
+1. **Uninstall** KolosalCut lama (Settings → Apps → KolosalCut → Uninstall).
+2. Unduh & install **`KolosalCut-Setup-1.3.0.exe`** (di bawah).
+3. Jika SmartScreen muncul: **More info → Run anyway**.
+4. Buka aplikasi — pastikan header tertulis **v1.3.0**.
+
+## Isi Rilis
+
+| Berkas | Keterangan |
+|---|---|
+| `KolosalCut-Setup-1.3.0.exe` | Installer Windows (disarankan) |
+| `KolosalCut-Portable-1.3.0.exe` | Versi portabel tanpa instalasi |
+
+---
+
 # KolosalCut v1.2.1
 
 Perbaikan tampilan timeline: **tombol bagian (P1–P50) tidak lagi meluber keluar panel ke menu lain** — persis masalah pada laporanmu saat memproses film 2 jam menjadi 50 bagian.

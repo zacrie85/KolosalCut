@@ -144,26 +144,28 @@ export function PreviewCanvas({
     if (hasVideo) {
       const vw = video.videoWidth;
       const vh = video.videoHeight;
-      const drawCover = (scaleMul: number) => {
+      // posisi horizontal ambil gambar: 0 = kiri, 0.5 = tengah, 1 = kanan
+      const panX = Math.min(1, Math.max(0, settings.panX));
+      const drawCover = (scaleMul: number, usePan = true) => {
         const s = Math.max(CW / vw, CH / vh) * settings.zoom * scaleMul;
         const w = vw * s;
         const h = vh * s;
-        ctx.drawImage(video, (CW - w) / 2, (CH - h) / 2, w, h);
+        ctx.drawImage(video, usePan ? (CW - w) * panX : (CW - w) / 2, (CH - h) / 2, w, h);
       };
       const drawContain = (scaleMul: number) => {
         const s = Math.min(CW / vw, CH / vh) * settings.zoom * scaleMul;
         const w = vw * s;
         const h = vh * s;
-        ctx.drawImage(video, (CW - w) / 2, (CH - h) / 2, w, h);
+        ctx.drawImage(video, (CW - w) * panX, (CH - h) / 2, w, h);
       };
 
       if (settings.ratio === "full") {
         drawCover(1);
       } else {
-        // latar blur
+        // latar blur (tetap tengah, hanya dekorasi)
         ctx.filter = "blur(22px) brightness(0.55) saturate(0.8)";
-        drawCover(1.12);
-        // video utama berisi
+        drawCover(1.12, false);
+        // video utama berisi — digeser sesuai posisi ambil
         ctx.filter = "none";
         drawContain(1);
       }

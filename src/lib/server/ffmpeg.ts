@@ -284,12 +284,14 @@ async function encodePart(
   const textsC = coverOn ? textFilters(s, partNum, tmpDir, true) : "";
 
   // ---- cabang video utama ----
+  // posisi horizontal ambil gambar: 0 = kiri, 0.5 = tengah, 1 = kanan
+  const panX = Math.min(1, Math.max(0, Number.isFinite(s.panX) ? s.panX : 0.5)).toFixed(4);
   if (s.ratio === "full") {
     const WZ = even(1080 * s.zoom);
     const HZ = even(1920 * s.zoom);
     g.push(
       `[0:v]scale=${WZ}:${HZ}:force_original_aspect_ratio=increase:flags=lanczos,` +
-        `crop=1080:1920:x=(in_w-1080)/2:y=(in_h-1920)/2,` +
+        `crop=1080:1920:x=(in_w-1080)*${panX}:y=(in_h-1920)/2,` +
         `fps=30,setsar=1${bars}[pv0]`
     );
   } else {
@@ -304,7 +306,7 @@ async function encodePart(
       `[fgsrc]scale=${WZ}:${HZ}:force_original_aspect_ratio=decrease:flags=lanczos,` +
         `crop=trunc(iw/2)*2:trunc(ih/2)*2[fg]`
     );
-    g.push(`[bg][fg]overlay=(W-w)/2:(H-h)/2[ovl]`);
+    g.push(`[bg][fg]overlay=(W-w)*${panX}:(H-h)/2[ovl]`);
     g.push(`[ovl]fps=30,setsar=1${bars}[pv0]`);
   }
 

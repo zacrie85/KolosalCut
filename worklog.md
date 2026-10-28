@@ -170,3 +170,21 @@ Work Log:
 
 Stage Summary:
 - Banyak bagian sekalipun (50) tetap berada di dalam panel timeline-nya: bisa digulir + auto-center ke part aktif; tampilan sedikit bagian tidak berubah
+
+---
+Task ID: 8
+Agent: main (Z.ai)
+Task: v1.3.0 — menu 07 Rasio & Zoom: slider "Ambil Bagian" geser kiri-kanan (titik ambil zoom/crop 9:16)
+
+Work Log:
+- Permintaan user: tambah 1 tombol geser kiri-kanan di menu 07 untuk menentukan bagian mana dari video yang diambil saat zoom/crop 9:16
+- Setting baru panX (0-1, default 0.5 = tengah = perilaku lama): Settings interface + DEFAULT_SETTINGS + sanitizeSettings (isFinite-aware agar nilai 0/KIRI valid, clamp 0-1)
+- settings-panel Section 07: slider "Ambil Bagian" (0-100%) di bawah Zoom + penanda KIRI/TENGAH/KANAN + teks penjelasan per mode rasio; ikut snapshot "Terapkan Setelan ke Semua" otomatis
+- preview-canvas: drawCover/drawContain memakai (CW-w)*panX sebagai anchor X; latar blur tetap tengah (dekorasi); pratinjau live mengikuti slider
+- ffmpeg.ts: mode full -> crop x=(in_w-1080)*PANX (dulu selalu /2); mode fit -> overlay x=(W-w)*PANX (dulu /2); panX di-clamp & toFixed(4)
+- Bonus: rapikan isDesktop effect (eslint react-hooks/set-state-in-effect) -> useSyncExternalStore + subscribeNoop stabil
+- Uji: ekspresi crop kiri (0.0) / kanan (1.0) + overlay geser (0.25) diverifikasi ffmpeg lokal dengan testsrc 1280x720 -> semua render sukses; eslint 4 file bersih; npm run build sukses (zip 18.7MB)
+- package.json 1.3.0; RELEASE_NOTES.md: seksi v1.3.0 + cara upgrade + isi rilis
+
+Stage Summary:
+- User kini bisa memilih sisi kiri/tengah/kanan video yang diambil saat crop/zoom 9:16, pratinjau langsung, tersalin ke semua video; default tengah = perilaku lama

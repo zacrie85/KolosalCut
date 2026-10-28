@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+/** subscribe noop stabil untuk useSyncExternalStore (nilai API desktop tidak pernah berubah) */
+const subscribeNoop = () => () => {};
 import {
   Settings,
   LabelFormat,
@@ -289,10 +292,11 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
   const [tab, setTab] = useState<SettingsTab>("video");
 
   // deteksi API desktop (Electron) untuk dialog pilih folder
-  const [isDesktop, setIsDesktop] = useState(false);
-  useEffect(() => {
-    setIsDesktop(Boolean(window.kolosalAPI?.selectOutputDir));
-  }, []);
+  const isDesktop = useSyncExternalStore(
+    subscribeNoop,
+    () => Boolean(window.kolosalAPI?.selectOutputDir),
+    () => false
+  );
 
   const pickFolder = async () => {
     const api = window.kolosalAPI;
@@ -788,10 +792,33 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
             {s.zoom.toFixed(2)}×
           </span>
         </div>
+        <div className="flex items-center gap-3">
+          <Label className="text-xs text-zinc-400 shrink-0">Ambil Bagian</Label>
+          <Slider
+            value={[s.panX]}
+            min={0}
+            max={1}
+            step={0.01}
+            disabled={disabled}
+            onValueChange={(v) => onChange({ panX: v[0] })}
+            className="flex-1"
+          />
+          <span className="text-[11px] text-zinc-500 tabular-nums w-12">
+            {Math.round(s.panX * 100)}%
+          </span>
+        </div>
+        <div
+          className="flex justify-between font-tech text-[9px] tracking-[0.18em] text-zinc-600 px-1 -mt-1.5"
+          aria-hidden
+        >
+          <span>◄ KIRI</span>
+          <span>TENGAH</span>
+          <span>KANAN ►</span>
+        </div>
         <p className="text-[11px] text-zinc-500 leading-snug">
           {s.ratio === "full"
-            ? "9:16 Penuh: video memenuhi layar (bagian yang tidak muat dipotong)."
-            : "9:16 Biasa: video utuh di tengah dengan latar blur; perbesar dengan zoom."}
+            ? "9:16 Penuh: video memenuhi layar; geser AMBIL BAGIAN untuk memilih sisi video yang diambil (kiri–tengah–kanan)."
+            : "9:16 Biasa: video utuh dengan latar blur; AMBIL BAGIAN menggeser posisi video ke kiri/kanan, dan jadi titik ambil saat di-zoom."}
         </p>
       </Section>
       </>

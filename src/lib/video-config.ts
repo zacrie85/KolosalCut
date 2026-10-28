@@ -198,6 +198,8 @@ export interface Settings {
   barSize: BarSize;
   ratio: RatioMode;
   zoom: number;
+  /** posisi horizontal ambil gambar 0 (kiri) – 1 (kanan); 0.5 = tengah */
+  panX: number;
   quality: QualityKey;
   /** jumlah video yang diproses serentak */
   parallel: ParallelKey;
@@ -254,6 +256,7 @@ export const DEFAULT_SETTINGS: Settings = {
   barSize: "sedang",
   ratio: "full",
   zoom: 1,
+  panX: 0.5,
   quality: "balanced",
   parallel: 5,
   outputDir: "",
@@ -395,6 +398,7 @@ export function sanitizeSettings(raw: unknown): Settings {
       : d.barSize,
     ratio: r.ratio === "fit" ? "fit" : "full",
     zoom: clamp(Number(r.zoom) || d.zoom, 1, 2.5),
+    panX: Number.isFinite(Number(r.panX)) ? clamp(Number(r.panX), 0, 1) : d.panX,
     quality: (["fast", "balanced", "high"] as QualityKey[]).includes(r.quality as QualityKey)
       ? (r.quality as QualityKey)
       : d.quality,
