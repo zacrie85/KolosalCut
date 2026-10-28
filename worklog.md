@@ -101,3 +101,25 @@ Stage Summary:
   - KolosalCut-Portable-1.0.0.exe (363.1 MB, tanpa install)
 - Web preview sandbox tetap berfungsi (default data dir tmpdir)
 - PERLU DIINGATKAN KE USER: revoke/rotate token GitHub yang dibagikan di chat
+
+---
+Task ID: 4
+Agent: main (Z.ai)
+Task: Fix error aplikasi Windows tidak bisa dibuka (MODULE_NOT_FOUND) + 4 upgrade: 7 font sinematik, frame neon/minimalis, render paralel, impor batch 50 video
+
+Work Log:
+- Diagnosa bug: standalone output dari bun+Windows menghasilkan node_modules rusak (MODULE_NOT_FOUND saat Electron spawn server.js)
+- Solusi: CI beralih ke npm (package-lock.json baru, ELECTRON_SKIP_BINARY_DOWNLOAD=1) + step baru "Uji server standalone" di CI (server dinyalakan & di-curl sebelum dipaketkan)
+- Buat queue.ts: antrean FIFO render paralel 1/3/5/7 via /api/process (body.parallel) + /api/jobs (status batch)
+- 7 font OFL diunduh (anton, bebas, oswald, montserrat, playfair, cinzel, archivo) ke resources/fonts + public/fonts; TextElement.font + pengaturan ukuran 24-120px per elemen
+- Overlay frame: scripts/make_overlays.py (PIL, half-res + LANCZOS) -> 3 desain neon berputar 48 frame @24fps loop 2s + 4 minimalis statis; pratinjau webp animasi via ffmpeg libwebp
+- ffmpeg.ts: hapus preset lama (vignette/grain), overlay frame via 2 input terbatas -t (pelajaran: split dari input loop tak terbatas = buffer tumbuh tanpa batas -> OOM 2.4GB; ditemukan via dmesg + dump argumen), font per elemen, zoompan cover diperkecil 2700x4800 -> 2160x3840
+- UI: page.tsx rewrite (antrean multi-video, snapshot setelan per video, tombol Terapkan Setelan ke Semua, polling /api/jobs), import-zone.tsx baru (maks 50), settings-panel (grid frame dengan thumbnail webp animasi, pilih font per teks, seksi Proses Paralel), preview-canvas (overlay webp beranimasi + font bundel via @font-face)
+- Hapus 21 dependensi tak terpakai (prisma, next-auth, dnd-kit, dsb) -> npm ci lebih cepat
+- E2E lokal: 2 video paralel DONE (RSS puncak 1.2GB), frame neon + 3 font terverifikasi visual; lint bersih
+- CI: gagal 1x (electron-builder minta GH_TOKEN di CI) -> --publish never; tag v1.1.0 -> rilis terbit
+
+Stage Summary:
+- Release: https://github.com/zacrie85/KolosalCut/releases/tag/v1.1.0 (Setup 388.5 MB + Portable 346.2 MB)
+- Semua 5 permintaan user selesai: fix buka aplikasi, 7 font + ukuran, frame neon berputar + 4 minimalis, paralel 1/3/5/7, impor 50 video + terapkan setelan
+- Smoke test runtime standalone kini bagian tetap CI -> regresi packaging tertangkap otomatis
