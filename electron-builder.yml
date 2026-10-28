@@ -11,9 +11,12 @@ extraResources:
   # Binary FFmpeg/FFprobe Windows (diunduh oleh CI, tidak ikut repo)
   - from: resources/bin
     to: bin
-  # Font untuk teks sinematik pada video
+  # Font sinematik untuk teks pada video
   - from: resources/fonts
     to: fonts
+  # Overlay frame neon (animasi) & minimalis
+  - from: resources/overlays
+    to: overlays
   # Ikon untuk jendela aplikasi
   - from: build/icon.ico
     to: app.ico

@@ -5,7 +5,8 @@ import path from "path";
 import {
   Settings,
   TextElement,
-  getPreset,
+  getFrameStyle,
+  getFont,
   labelTextFor,
   labelWordFor,
   computeSegments,
@@ -22,16 +23,25 @@ const DATA_DIR =
 export const UPLOADS_DIR = path.join(DATA_DIR, "uploads");
 export const EXPORTS_DIR = path.join(DATA_DIR, "exports");
 
-// Lokasi binary FFmpeg & font teks — dapat dialihkan lewat env pada versi desktop.
+// Lokasi binary FFmpeg, font & overlay frame — dialihkan lewat env pada versi desktop.
 const FFMPEG_BIN = process.env.FFMPEG_PATH || "ffmpeg";
 const FFPROBE_BIN = process.env.FFPROBE_PATH || "ffprobe";
-const FONT =
-  process.env.FFMPEG_FONT ||
-  "/usr/share/fonts/truetype/english/Carlito-Bold.ttf";
+const FONTS_DIR =
+  process.env.KOLOSAL_FONTS_DIR || path.join(process.cwd(), "resources", "fonts");
+const OVERLAYS_DIR =
+  process.env.KOLOSAL_OVERLAYS_DIR || path.join(process.cwd(), "resources", "overlays");
+const FONT_FALLBACK = path.join(FONTS_DIR, "carlito.ttf");
 
 /** Escape path agar aman dipakai di dalam filter FFmpeg (termasuk path Windows C:\...). */
 function escFilterPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
+}
+
+/** lokasi berkas TTF untuk kunci font */
+function fontFile(fontKey: string): string {
+  const f = getFont(fontKey as Parameters<typeof getFont>[0]);
+  const p = path.join(FONTS_DIR, f.file);
+  return p;
 }
 
 const QUALITY: Record<QualityKey, { preset: string; crf: number }> = {
@@ -101,6 +111,12 @@ async function runFfmpeg(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const full = [...args, "-progress", "pipe:1", "-nostats"];
+    try {
+      // jejak argumen untuk diagnostik (tertimpa tiap panggilan)
+      void fs.writeFile(path.join(os.tmpdir(), "kolosalcut-last-ffmpeg.txt"), full.join("\n"), "utf8");
+    } catch {
+      /* diagnostik opsional */
+    }
     const proc = spawn(FFMPEG_BIN, full);
     let stderr = "";
     let lastFrac = 0;
@@ -141,15 +157,6 @@ async function runFfmpeg(
 // ============================================================
 // Penyusun filter
 // ============================================================
-function lookFilters(s: Settings): string {
-  const p = getPreset(s.preset);
-  const f: string[] = [];
-  if (p.ff) f.push(p.ff);
-  if (p.vignette) f.push("vignette");
-  if (p.grain > 0) f.push(`noise=alls=${p.grain}:allf=t+u`);
-  return f.length ? "," + f.join(",") : "";
-}
-
 function barsFilter(s: Settings): string {
   if (!s.bars) return "";
   const bar = BAR_H[s.barSize];
@@ -179,7 +186,7 @@ function textFilters(
     const px = Math.round(el.size);
     const bw = Math.max(2, Math.round(px * 0.055));
     const ls = Math.round(px * 0.32);
-    let opts = `drawtext=fontfile='${escFilterPath(FONT)}':textfile='${escFilterPath(file)}':fontsize=${px}:line_spacing=${ls}`;
+    let opts = `drawtext=fontfile='${escFilterPath(fontFile(el.font))}':textfile='${escFilterPath(file)}':fontsize=${px}:line_spacing=${ls}`;
     if (style === "title") {
       opts += `:fontcolor=white:borderw=${bw}:bordercolor=black@0.85:shadowx=2:shadowy=3:shadowcolor=black@0.45`;
     } else if (style === "label") {
@@ -241,8 +248,37 @@ async function encodePart(
     silPart = idx++;
   }
 
+  // ---- input overlay frame (neon berputar / minimalis) ----
+  // Dua input terpisah dengan durasi TERBATAS (-t): input loop tak terbatas yang
+  // dibagi split ke cabang dengan laju konsumsi berbeda akan menumpuk memori tanpa batas.
+  const style = getFrameStyle(s.frame);
+  const frameOn = style.kind !== "none" && !!style.overlay;
+  let ovCover = -1;
+  let ovMain = -1;
+  const overlaySrc = () =>
+    style.kind === "anim"
+      ? path.join(OVERLAYS_DIR, style.overlay!, "frame_%04d.png")
+      : path.join(OVERLAYS_DIR, `${style.overlay}.png`);
+  if (frameOn) {
+    if (coverOn) {
+      args.push(
+        "-loop", "1",
+        "-framerate", String(style.fps ?? 24),
+        "-t", (coverDur + 1).toFixed(2),
+        "-i", overlaySrc()
+      );
+      ovCover = idx++;
+    }
+    args.push(
+      "-loop", "1",
+      "-framerate", String(style.fps ?? 24),
+      "-t", (seg.dur + 1).toFixed(2),
+      "-i", overlaySrc()
+    );
+    ovMain = idx++;
+  }
+
   const g: string[] = [];
-  const look = lookFilters(s);
   const bars = barsFilter(s);
   const texts = textFilters(s, partNum, tmpDir, false);
   const textsC = coverOn ? textFilters(s, partNum, tmpDir, true) : "";
@@ -254,7 +290,7 @@ async function encodePart(
     g.push(
       `[0:v]scale=${WZ}:${HZ}:force_original_aspect_ratio=increase:flags=lanczos,` +
         `crop=1080:1920:x=(in_w-1080)/2:y=(in_h-1920)/2,` +
-        `fps=30,setsar=1${look}${bars}${texts}[pv]`
+        `fps=30,setsar=1${bars}[pv0]`
     );
   } else {
     const WZ = even(1080 * s.zoom);
@@ -269,17 +305,31 @@ async function encodePart(
         `crop=trunc(iw/2)*2:trunc(ih/2)*2[fg]`
     );
     g.push(`[bg][fg]overlay=(W-w)/2:(H-h)/2[ovl]`);
-    g.push(`[ovl]fps=30,setsar=1${look}${bars}${texts}[pv]`);
+    g.push(`[ovl]fps=30,setsar=1${bars}[pv0]`);
+  }
+
+  // ---- lapisan frame neon/minimalis lalu teks ----
+  if (frameOn) {
+    g.push(`[pv0][${ovMain}:v]overlay=0:0[pv1]`);
+    g.push(`[pv1]null${texts}[pv]`);
+  } else {
+    g.push(`[pv0]null${texts}[pv]`);
   }
 
   let maps: string[];
   if (coverOn) {
     g.push(
-      `[${coverInput}:v]scale=2700:4800:force_original_aspect_ratio=increase:flags=lanczos,` +
-        `crop=2700:4800,` +
+      `[${coverInput}:v]scale=2160:3840:force_original_aspect_ratio=increase:flags=lanczos,` +
+        `crop=2160:3840,` +
         `zoompan=z='1+0.12*on/${NF}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${NF}:s=1080x1920:fps=30,` +
-        `setsar=1${look}${bars}${textsC}[cv]`
+        `setsar=1${bars}[cv0]`
     );
+    if (frameOn) {
+      g.push(`[cv0][${ovCover}:v]overlay=0:0[cv1]`);
+      g.push(`[cv1]null${textsC}[cv]`);
+    } else {
+      g.push(`[cv0]null${textsC}[cv]`);
+    }
     if (job.info.hasAudio) {
       g.push(`[0:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[pa]`);
     } else {

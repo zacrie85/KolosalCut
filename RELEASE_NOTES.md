@@ -1,35 +1,54 @@
-# KolosalCut v1.0.0
+# KolosalCut v1.1.0
 
-Rilis perdana **KolosalCut** — aplikasi desktop Windows untuk memotong & memecah video menjadi bagian-bagian reel siap unggah.
+Pembaruan besar! **Perbaikan error aplikasi tidak bisa dibuka** + 4 fitur baru yang disempurnakan.
+
+## Perbaikan
+
+- **Memperbaiki "KolosalCut gagal dimulai" (MODULE_NOT_FOUND)** — aplikasi kini berjalan mulus di Windows. Build sekarang diverifikasi otomatis: server diuji nyata sebelum installer dibuat, jadi masalah serupa tidak akan terulang.
+
+## Fitur Baru
+
+### 1. 7 Font Sinematik
+Pilihan font untuk judul, label part, dan deskripsi — semua tampil asli di pratinjau:
+**Anton** (poster epik), **Bebas Neue** (kapsul sinema), **Oswald** (modern tegas), **Montserrat Black** (bersih & tebal), **Playfair Display** (drama klasik), **Cinzel** (Hollywood retro), **Archivo Black** (kolosal kokoh) + Carlito standar.
+Pengaturan **ukuran font** per teks juga diperluas (24–120px).
+
+### 2. Gaya Frame Baru — Neon & Minimalis
+Seluruh gaya frame lama diganti:
+- **Neon Emas** — cahaya emas berputar mengelilingi frame 9:16
+- **Neon Ganda** — dua komet neon cyan & magenta
+- **Neon Pelangi** — cahaya warna-warni penuh energi
+- **Minimal Putih / Emas / Sudut / Garis** — layer minimalis elegan untuk video Anda
+
+Pratinjau menampilkan animasi neon asli sebelum render.
+
+### 3. Render Paralel
+Proses **1, 3, 5, atau 7 video sekaligus** secara serentak — atur di tab Video → Proses Paralel.
+
+### 4. Impor Batch Hingga 50 Video
+- Impor **50 video sekaligus** (drag & drop atau pilih file)
+- Video diproses **berurutan dari video pertama sampai terakhir** sesuai slot paralel
+- Tombol **"Terapkan Setelan ke Semua"** — setel video pertama, terapkan gaya yang sama ke seluruh antrean (judul tetap otomatis dari nama file masing-masing)
 
 ## Isi Rilis
 
 | Berkas | Keterangan |
 |---|---|
-| `KolosalCut-Setup-1.0.0.exe` | Installer Windows (disarankan) — jalankan, pilih folder, selesai. Shortcut dibuat di desktop. |
-| `KolosalCut-Portable-1.0.0.exe` | Versi portabel tanpa instalasi — cukup jalankan langsung. |
-
-## Fitur
-
-- Potong/pisah video otomatis: **durasi per bagian manual** atau **jumlah bagian** yang ditentukan
-- **Cover sinematik 2–3 detik** dengan efek zoom halus di awal setiap bagian
-- **Judul otomatis** dari nama file, **label bagian** fleksibel (Part / Bagian / Eps / Episode)
-- **Teks deskripsi** bebas diatur
-- **Preset tampilan**: frame sinema & epik (vignette, grain film)
-- **Rasio 9:16** penuh (fullscreen) atau mode *normal* dengan latar blur
-- Posisi judul, label & deskripsi bisa **digeser bebas** (atas-bawah-kiri-kanan) lewat panel geser maupun drag langsung di pratinjau
-- Pilihan kualitas render: Cepat / Seimbang / Tinggi
-- FFmpeg **sudah dibundel** — tidak perlu instalasi tambahan, bekerja 100% offline
+| `KolosalCut-Setup-1.1.0.exe` | Installer Windows (disarankan) |
+| `KolosalCut-Portable-1.1.0.exe` | Versi portabel tanpa instalasi |
 
 ## Cara Install
 
-1. Unduh `KolosalCut-Setup-1.0.0.exe` di bawah.
-2. Jalankan berkas tersebut. Jika Windows SmartScreen menampilkan peringatan *"Windows protected your PC"* (karena aplikasi belum ditandatangani secara digital), klik **More info → Run anyway**.
-3. Ikuti langkah instalasi, lalu buka **KolosalCut** dari desktop.
-4. Unggah video, atur pengaturan, lalu render. Hasil video dapat diunduh ke folder pilihan Anda.
+1. Unduh `KolosalCut-Setup-1.1.0.exe` di bawah.
+2. Jika SmartScreen muncul (*"Windows protected your PC"*), klik **More info → Run anyway**.
+3. Install & buka **KolosalCut** dari desktop.
+
+## Upgrade dari v1.0.0
+
+Cukup install versi baru di atas versi lama (installer akan mengganti otomatis).
 
 ## Persyaratan Sistem
 
 - Windows 10 / 11 (64-bit)
-- RAM 4 GB atau lebih
-- Ruang disk kosong ± 1 GB
+- RAM 8 GB disarankan untuk render paralel 5–7 video
+- Ruang disk kosong ± 2 GB

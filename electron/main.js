@@ -90,6 +90,8 @@ function startServer(port) {
     PORT: String(port),
     HOSTNAME: "127.0.0.1",
     KOLOSAL_DATA_DIR: app.getPath("userData"),
+    KOLOSAL_FONTS_DIR: path.join(FONT_DIR),
+    KOLOSAL_OVERLAYS_DIR: path.join(process.resourcesPath, "overlays"),
     FFMPEG_PATH: path.join(BIN_DIR, "ffmpeg.exe"),
     FFPROBE_PATH: path.join(BIN_DIR, "ffprobe.exe"),
     FFMPEG_FONT: path.join(FONT_DIR, "Carlito-Bold.ttf"),

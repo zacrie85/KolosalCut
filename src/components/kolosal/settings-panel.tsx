@@ -1,7 +1,18 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Settings, LabelFormat, FRAME_PRESETS, QUALITY_INFO, QualityKey, TextElement } from "@/lib/video-config";
+import {
+  Settings,
+  LabelFormat,
+  FRAME_STYLES,
+  FONT_OPTIONS,
+  PARALLEL_OPTIONS,
+  ParallelKey,
+  FontKey,
+  QUALITY_INFO,
+  QualityKey,
+  TextElement,
+} from "@/lib/video-config";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -26,6 +37,7 @@ import {
   Proportions,
   Gauge,
   Move,
+  Layers,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
@@ -272,8 +284,33 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
     };
 
   const disabled = !hasVideo;
-  const presetObj = FRAME_PRESETS.find((p) => p.key === s.preset);
   const [tab, setTab] = useState<SettingsTab>("video");
+
+  /** pilihan font dengan contoh tulisan memakai font aslinya */
+  const fontSelect = (
+    key: "title" | "label" | "desc",
+    el: TextElement
+  ) => (
+    <div className="flex items-center gap-2">
+      <Label className="text-xs text-zinc-400 shrink-0">Font</Label>
+      <Select
+        value={el.font}
+        disabled={disabled}
+        onValueChange={(v) => setEl(key)({ font: v as FontKey })}
+      >
+        <SelectTrigger className="h-8 flex-1 bg-zinc-950 border-zinc-700 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {FONT_OPTIONS.map((f) => (
+            <SelectItem key={f.key} value={f.key} style={{ fontFamily: `"${f.css}", sans-serif` }}>
+              {f.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -504,19 +541,20 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
           placeholder="Isi otomatis dari nama file..."
           className="h-9 bg-zinc-950 border-zinc-700 text-sm"
         />
+        {fontSelect("title", s.title)}
         <PositionPad el={s.title} onChange={setEl("title")} disabled={disabled} />
         <div className="flex items-center gap-3">
           <Label className="text-xs text-zinc-400 shrink-0">Ukuran</Label>
           <Slider
             value={[s.title.size]}
-            min={30}
-            max={90}
+            min={24}
+            max={120}
             step={2}
             disabled={disabled}
             onValueChange={setSize("title")}
             className="flex-1"
           />
-          <span className="text-[11px] text-zinc-500 tabular-nums w-6">{s.title.size}</span>
+          <span className="text-[11px] text-zinc-500 tabular-nums w-7">{s.title.size}px</span>
         </div>
       </Section>
 
@@ -560,18 +598,19 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
           )}
         </div>
         <PositionPad el={s.label} onChange={setEl("label")} disabled={disabled} />
+        {fontSelect("label", s.label)}
         <div className="flex items-center gap-3">
           <Label className="text-xs text-zinc-400 shrink-0">Ukuran</Label>
           <Slider
             value={[s.label.size]}
             min={24}
-            max={80}
+            max={120}
             step={2}
             disabled={disabled}
             onValueChange={setSize("label")}
             className="flex-1"
           />
-          <span className="text-[11px] text-zinc-500 tabular-nums w-6">{s.label.size}</span>
+          <span className="text-[11px] text-zinc-500 tabular-nums w-7">{s.label.size}px</span>
         </div>
       </Section>
 
@@ -596,18 +635,19 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
           className="bg-zinc-950 border-zinc-700 text-sm resize-none"
         />
         <PositionPad el={s.desc} onChange={setEl("desc")} disabled={disabled} />
+        {fontSelect("desc", s.desc)}
         <div className="flex items-center gap-3">
           <Label className="text-xs text-zinc-400 shrink-0">Ukuran</Label>
           <Slider
             value={[s.desc.size]}
             min={24}
-            max={70}
+            max={120}
             step={2}
             disabled={disabled}
             onValueChange={setSize("desc")}
             className="flex-1"
           />
-          <span className="text-[11px] text-zinc-500 tabular-nums w-6">{s.desc.size}</span>
+          <span className="text-[11px] text-zinc-500 tabular-nums w-7">{s.desc.size}px</span>
         </div>
       </Section>
       </>
@@ -616,30 +656,52 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
       {tab === "gaya" && (
       <>
 
-      {/* ===== GAYA FILM ===== */}
-      <Section num="06" icon={<Palette className="w-4 h-4" />} title="Gaya Frame Film">
-        <div className="grid grid-cols-1 gap-1.5 max-h-[240px] overflow-y-auto kolosal-scroll pr-1">
-          {FRAME_PRESETS.map((p) => (
+      {/* ===== GAYA FRAME ===== */}
+      <Section num="06" icon={<Layers className="w-4 h-4" />} title="Gaya Frame Film">
+        <div className="grid grid-cols-2 gap-1.5 max-h-[300px] overflow-y-auto kolosal-scroll pr-1">
+          {FRAME_STYLES.map((p) => (
             <button
               key={p.key}
               type="button"
               disabled={disabled}
-              onClick={() => onChange({ preset: p.key, bars: p.defBars })}
-              className={`text-left rounded-lg border px-3 py-2 transition-colors disabled:opacity-50 ${
-                s.preset === p.key
-                  ? "border-cyan-300/50 bg-cyan-400/10"
+              onClick={() => onChange({ frame: p.key, bars: p.defBars })}
+              className={`text-left rounded-lg border p-2 flex gap-2 items-center transition-colors disabled:opacity-50 ${
+                s.frame === p.key
+                  ? "border-cyan-300/60 bg-cyan-400/10 shadow-[0_0_14px_-4px_rgba(34,211,238,0.6)]"
                   : "border-zinc-700/70 bg-zinc-950 hover:border-zinc-500"
               }`}
             >
-              <span
-                className={`block text-xs font-semibold ${s.preset === p.key ? "text-cyan-200" : "text-zinc-200"}`}
-              >
-                {p.name}
+              <span className="shrink-0 relative w-[30px] h-[53px] rounded-md overflow-hidden bg-black border border-zinc-700 flex items-center justify-center">
+                {p.preview ? (
+                  <img
+                    src={p.preview}
+                    alt=""
+                    aria-hidden
+                    className="absolute inset-0 w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="text-[8px] text-zinc-500 font-tech">OFF</span>
+                )}
               </span>
-              <span className="block text-[11px] text-zinc-500 leading-snug mt-0.5">{p.tagline}</span>
+              <span className="min-w-0">
+                <span
+                  className={`block text-[11px] font-semibold leading-tight ${
+                    s.frame === p.key ? "text-cyan-200" : "text-zinc-200"
+                  }`}
+                >
+                  {p.name}
+                </span>
+                <span className="block text-[10px] text-zinc-500 leading-snug mt-0.5 line-clamp-2">
+                  {p.tagline}
+                </span>
+              </span>
             </button>
           ))}
         </div>
+        <p className="text-[11px] text-zinc-500 leading-snug">
+          Frame neon berputar beranimasi pada hasil ekspor (pratinjau menampilkan animasi asli).
+        </p>
         <Separator className="bg-zinc-800" />
         <div className="flex items-center justify-between">
           <Label htmlFor="bars-on" className="text-xs text-zinc-300">
@@ -719,6 +781,33 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
       {tab === "video" && (
       <>
 
+      {/* ===== RENDER PARALEL ===== */}
+      <Section num="07" icon={<Layers className="w-4 h-4" />} title="Proses Paralel">
+        <div className="flex gap-1.5">
+          {PARALLEL_OPTIONS.map((n) => (
+            <Button
+              key={n}
+              size="sm"
+              disabled={disabled}
+              variant={s.parallel === n ? "default" : "outline"}
+              className={`h-8 flex-1 text-xs ${
+                s.parallel === n
+                  ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]"
+                  : "border-zinc-700 text-zinc-300"
+              }`}
+              onClick={() => onChange({ parallel: n as ParallelKey })}
+            >
+              {n}×
+            </Button>
+          ))}
+        </div>
+        <p className="text-[11px] text-zinc-500 leading-snug">
+          {s.parallel === 1
+            ? "Satu video dirender pada satu waktu — paling ringan untuk PC lama."
+            : `${s.parallel} video dirender serentak dari antrean impor, urutan tetap dari video pertama.`}
+        </p>
+      </Section>
+
       {/* ===== KUALITAS ===== */}
       <Section num="08" icon={<Gauge className="w-4 h-4" />} title="Kualitas Render">
         <div className="flex gap-1.5">
@@ -735,7 +824,7 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
             </Button>
           ))}
         </div>
-        <p className="text-[11px] text-zinc-500">{presetObj ? "" : ""}{QUALITY_INFO[s.quality].desc}</p>
+        <p className="text-[11px] text-zinc-500">{QUALITY_INFO[s.quality].desc}</p>
       </Section>
       </>
       )}

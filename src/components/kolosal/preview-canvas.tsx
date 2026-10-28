@@ -5,7 +5,9 @@ import {
   Settings,
   TextElement,
   BAR_H,
-  getPreset,
+  getFrameStyle,
+  getFont,
+  FONT_OPTIONS,
   labelTextFor,
   maxCharsFor,
   wrapText,
@@ -64,6 +66,38 @@ export function PreviewCanvas({
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
 
+  // gambar overlay frame (webp animasi neon / png minimalis) — digambar tiap frame,
+  // sehingga animasi webp ikut bergerak di pratinjau
+  const overlayRef = useRef<HTMLImageElement | null>(null);
+  const overlayKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const style = getFrameStyle(settings.frame);
+    if (!style.preview) {
+      overlayRef.current = null;
+      overlayKeyRef.current = null;
+      return;
+    }
+    const img = new Image();
+    img.decoding = "async";
+    img.src = style.preview;
+    img.onload = () => {
+      overlayRef.current = img;
+      overlayKeyRef.current = style.key;
+    };
+    return () => {
+      img.onload = null;
+    };
+  }, [settings.frame]);
+
+  // pastikan font bundel siap dipakai canvas
+  useEffect(() => {
+    if (typeof document !== "undefined" && document.fonts) {
+      FONT_OPTIONS.forEach((f) => {
+        void document.fonts.load(`${f.weight} 40px "${f.css}"`);
+      });
+    }
+  }, []);
+
   const reportTime = useCallback(
     (t: number) => {
       setTime(t);
@@ -105,13 +139,11 @@ export function PreviewCanvas({
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, CW, CH);
 
-    const preset = getPreset(settings.preset);
     const hasVideo = video && videoUrl && video.readyState >= 2 && video.videoWidth > 0;
 
     if (hasVideo) {
       const vw = video.videoWidth;
       const vh = video.videoHeight;
-      const cssFilter = preset.css === "none" ? "none" : preset.css;
       const drawCover = (scaleMul: number) => {
         const s = Math.max(CW / vw, CH / vh) * settings.zoom * scaleMul;
         const w = vw * s;
@@ -126,14 +158,13 @@ export function PreviewCanvas({
       };
 
       if (settings.ratio === "full") {
-        ctx.filter = cssFilter;
         drawCover(1);
       } else {
         // latar blur
-        ctx.filter = `${cssFilter === "none" ? "" : cssFilter} blur(22px) brightness(0.55) saturate(0.8)`;
+        ctx.filter = "blur(22px) brightness(0.55) saturate(0.8)";
         drawCover(1.12);
         // video utama berisi
-        ctx.filter = cssFilter;
+        ctx.filter = "none";
         drawContain(1);
       }
       ctx.filter = "none";
@@ -147,21 +178,18 @@ export function PreviewCanvas({
       ctx.textAlign = "left";
     }
 
-    // vinyet
-    if (preset.vignette && hasVideo) {
-      const grad = ctx.createRadialGradient(CW / 2, CH / 2, CH * 0.28, CW / 2, CH / 2, CH * 0.62);
-      grad.addColorStop(0, "rgba(0,0,0,0)");
-      grad.addColorStop(1, "rgba(0,0,0,0.5)");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, CW, CH);
-    }
-
     // bar sinema
     if (settings.bars && hasVideo) {
       const bar = BAR_H[settings.barSize] * SC;
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, CW, bar);
       ctx.fillRect(0, CH - bar, CW, bar);
+    }
+
+    // lapisan frame neon/minimalis (di atas bar, di bawah teks)
+    const styleNow = getFrameStyle(settings.frame);
+    if (hasVideo && styleNow.preview && overlayRef.current && overlayKeyRef.current === styleNow.key) {
+      ctx.drawImage(overlayRef.current, 0, 0, CW, CH);
     }
 
     // ---- teks overlay ----
@@ -185,7 +213,8 @@ export function PreviewCanvas({
     for (const it of items) {
       const px = it.el.size * SC;
       const lines = wrapText(it.text, maxCharsFor(it.el.size));
-      ctx.font = `700 ${px}px "Carlito", "DejaVu Sans", sans-serif`;
+      const fopt = getFont(it.el.font);
+      ctx.font = `${fopt.weight} ${px}px "${fopt.css}", "KC Carlito", sans-serif`;
       ctx.textBaseline = "top";
       const lineH = px * 1.32;
       const widest = Math.max(...lines.map((l) => ctx.measureText(l).width), 10);

@@ -337,3 +337,55 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ============================================================
+   FONT SINEMATIK BUNDEL (muncul di pratinjau & pilihan font)
+   ============================================================ */
+@font-face {
+  font-family: "KC Anton";
+  src: url("/fonts/anton.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Bebas";
+  src: url("/fonts/bebas-neue.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Oswald";
+  src: url("/fonts/oswald.ttf") format("truetype");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Montserrat";
+  src: url("/fonts/montserrat.ttf") format("truetype");
+  font-weight: 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Playfair";
+  src: url("/fonts/playfair-display.ttf") format("truetype");
+  font-weight: 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Cinzel";
+  src: url("/fonts/cinzel.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Archivo";
+  src: url("/fonts/archivo-black.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Carlito";
+  src: url("/fonts/carlito.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}

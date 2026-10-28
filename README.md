@@ -10,12 +10,16 @@ Dibangun dengan **Next.js** (antarmuka), **FFmpeg** (render video), dan **Electr
 
 ## Fitur
 
+- **Impor batch hingga 50 video** sekaligus — diproses berurutan sesuai antrean
+- **Render paralel** — 1, 3, 5, atau 7 video dirender serentak
+- **Terapkan setelan ke semua video** — setel sekali, berlaku ke seluruh antrean
+- **7 font sinematik** (Anton, Bebas Neue, Oswald, Montserrat, Playfair, Cinzel, Archivo Black) + pengaturan ukuran font per teks
+- **Gaya frame neon berputar** (emas / ganda / pelangi) yang mengelilingi frame 9:16 + **4 frame minimalis** (putih, emas, sudut, garis)
 - **Pisah otomatis** — mode durasi per bagian (manual) atau jumlah bagian yang diinginkan
 - **Cover sinematik 2–3 detik** dengan efek zoom halus di awal setiap bagian
 - **Judul otomatis** diambil dari nama file
 - **Label bagian fleksibel** — pilih kata Part / Bagian / Eps / Episode
 - **Teks deskripsi** bebas diisi dan diposisikan
-- **Preset tampilan** — frame sinema & epik (vignette + grain film)
 - **Rasio 9:16** — mode fullscreen atau normal dengan latar blur
 - **Posisi teks bebas** — geser judul/label/deskripsi ke atas, bawah, kiri, kanan lewat panel geser, tombol panah, atau drag langsung di pratinjau
 - **Pilihan kualitas render** — Cepat / Seimbang / Tinggi

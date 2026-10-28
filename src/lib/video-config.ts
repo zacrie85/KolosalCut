@@ -4,18 +4,164 @@
 
 export type SplitMode = "duration" | "parts";
 export type LabelFormat = "part" | "bagian" | "eps" | "episode" | "custom";
-export type FramePresetKey =
-  | "kolosal"
-  | "hollywood"
-  | "noir"
-  | "golden"
-  | "modern"
-  | "vintage"
-  | "none";
 export type RatioMode = "full" | "fit";
 export type QualityKey = "fast" | "balanced" | "high";
 export type BarSize = "kecil" | "sedang" | "besar";
 
+/** jumlah video yang dirender serentak */
+export type ParallelKey = 1 | 3 | 5 | 7;
+export const PARALLEL_OPTIONS: ParallelKey[] = [1, 3, 5, 7];
+
+// ============================================================
+// FONT SINEMATIK (semua lisensi OFL — bebas dibundel & didistribusikan)
+// ============================================================
+export type FontKey =
+  | "carlito"
+  | "anton"
+  | "bebas"
+  | "oswald"
+  | "montserrat"
+  | "playfair"
+  | "cinzel"
+  | "archivo";
+
+export interface FontOption {
+  key: FontKey;
+  name: string;
+  /** nama berkas TTF di folder fonts */
+  file: string;
+  /** bobot font sesuai berkas (dipakai pratinjau canvas) */
+  weight: number;
+  /** nama family @font-face untuk pratinjau browser */
+  css: string;
+}
+
+export const FONT_OPTIONS: FontOption[] = [
+  { key: "anton", name: "Anton (Poster Epik)", file: "anton.ttf", weight: 400, css: "KC Anton" },
+  { key: "bebas", name: "Bebas Neue (Kapsul Sinema)", file: "bebas-neue.ttf", weight: 400, css: "KC Bebas" },
+  { key: "oswald", name: "Oswald (Modern Tegas)", file: "oswald.ttf", weight: 600, css: "KC Oswald" },
+  { key: "montserrat", name: "Montserrat Black (Bersih & Tebal)", file: "montserrat.ttf", weight: 800, css: "KC Montserrat" },
+  { key: "playfair", name: "Playfair Display (Drama Klasik)", file: "playfair-display.ttf", weight: 800, css: "KC Playfair" },
+  { key: "cinzel", name: "Cinzel (Hollywood Retro)", file: "cinzel.ttf", weight: 700, css: "KC Cinzel" },
+  { key: "archivo", name: "Archivo Black (Kolosal Kokoh)", file: "archivo-black.ttf", weight: 400, css: "KC Archivo" },
+  { key: "carlito", name: "Carlito (Standar)", file: "carlito.ttf", weight: 700, css: "KC Carlito" },
+];
+
+export function getFont(k: FontKey): FontOption {
+  return FONT_OPTIONS.find((f) => f.key === k) ?? FONT_OPTIONS[0];
+}
+
+// ============================================================
+// GAYA FRAME — overlay neon berputar & minimalis
+// ============================================================
+export type FrameStyleKey =
+  | "none"
+  | "neon-emas"
+  | "neon-ganda"
+  | "neon-pelangi"
+  | "min-putih"
+  | "min-emas"
+  | "min-sudut"
+  | "min-garis";
+
+export interface FrameStyle {
+  key: FrameStyleKey;
+  name: string;
+  tagline: string;
+  /** none = tanpa frame; static = 1 PNG; anim = urutan PNG yang di-loop */
+  kind: "none" | "static" | "anim";
+  /** nama folder (anim) atau berkas PNG (static) di folder overlays */
+  overlay?: string;
+  /** fps urutan frame overlay (anim) */
+  fps?: number;
+  /** url aset pratinjau di /overlays */
+  preview?: string;
+  defBars: boolean;
+}
+
+export const FRAME_STYLES: FrameStyle[] = [
+  {
+    key: "none",
+    name: "Tanpa Frame",
+    tagline: "Video polos tanpa lapisan frame",
+    kind: "none",
+    defBars: false,
+  },
+  {
+    key: "neon-emas",
+    name: "Neon Emas",
+    tagline: "Cahaya emas berputar mengelilingi frame 9:16",
+    kind: "anim",
+    overlay: "neon-emas",
+    fps: 24,
+    preview: "/overlays/neon-emas.webp",
+    defBars: false,
+  },
+  {
+    key: "neon-ganda",
+    name: "Neon Ganda",
+    tagline: "Dua komet neon cyan & magenta berputar bersamaan",
+    kind: "anim",
+    overlay: "neon-ganda",
+    fps: 24,
+    preview: "/overlays/neon-ganda.webp",
+    defBars: false,
+  },
+  {
+    key: "neon-pelangi",
+    name: "Neon Pelangi",
+    tagline: "Cahaya warna-warni berputar penuh energi",
+    kind: "anim",
+    overlay: "neon-pelangi",
+    fps: 24,
+    preview: "/overlays/neon-pelangi.webp",
+    defBars: false,
+  },
+  {
+    key: "min-putih",
+    name: "Minimal Putih",
+    tagline: "Garis putih tipis rapi mengikuti sudut frame",
+    kind: "static",
+    overlay: "min-putih",
+    preview: "/overlays/min-putih.png",
+    defBars: false,
+  },
+  {
+    key: "min-emas",
+    name: "Minimal Emas",
+    tagline: "Garis emas tipis, elegan dan tenang",
+    kind: "static",
+    overlay: "min-emas",
+    preview: "/overlays/min-emas.png",
+    defBars: false,
+  },
+  {
+    key: "min-sudut",
+    name: "Minimal Sudut",
+    tagline: "Hanya penanda sudut, ruang video lebih luas",
+    kind: "static",
+    overlay: "min-sudut",
+    preview: "/overlays/min-sudut.png",
+    defBars: false,
+  },
+  {
+    key: "min-garis",
+    name: "Minimal Garis",
+    tagline: "Dua garis lembut di atas & bawah, gaya clean reel",
+    kind: "static",
+    overlay: "min-garis",
+    preview: "/overlays/min-garis.png",
+    defBars: false,
+  },
+];
+
+export function getFrameStyle(k: FrameStyleKey): FrameStyle {
+  return FRAME_STYLES.find((f) => f.key === k) ?? FRAME_STYLES[0];
+}
+
+// ============================================================
+// ELEMEN TEKS & SETTINGS
+// ============================================================
 export interface TextElement {
   enabled: boolean;
   text: string;
@@ -25,6 +171,8 @@ export interface TextElement {
   relY: number;
   /** ukuran font pada kanvas 1080px */
   size: number;
+  /** pilihan font sinematik */
+  font: FontKey;
 }
 
 export interface LabelElement extends TextElement {
@@ -44,12 +192,15 @@ export interface Settings {
   title: TextElement;
   label: LabelElement;
   desc: TextElement;
-  preset: FramePresetKey;
+  /** gaya frame overlay (neon / minimalis) */
+  frame: FrameStyleKey;
   bars: boolean;
   barSize: BarSize;
   ratio: RatioMode;
   zoom: number;
   quality: QualityKey;
+  /** jumlah video yang diproses serentak */
+  parallel: ParallelKey;
 }
 
 /** tinggi bar sinema (px pada kanvas 1080x1920) */
@@ -58,96 +209,6 @@ export const BAR_H: Record<BarSize, number> = {
   sedang: 235,
   besar: 340,
 };
-
-export interface FramePreset {
-  key: FramePresetKey;
-  name: string;
-  tagline: string;
-  /** filter CSS untuk pratinjau canvas */
-  css: string;
-  /** filter ffmpeg untuk render */
-  ff: string;
-  vignette: boolean;
-  grain: number;
-  defBars: boolean;
-}
-
-export const FRAME_PRESETS: FramePreset[] = [
-  {
-    key: "kolosal",
-    name: "Kolosal Agung",
-    tagline: "Nada emas epik + vinyet + bar sinema, gaya film kolosal & bibit",
-    css: "contrast(1.12) saturate(0.85) brightness(0.97) sepia(0.18)",
-    ff: "eq=contrast=1.12:saturation=0.85:brightness=-0.03,colorbalance=rm=0.07:gm=0.02:bm=-0.06:rh=0.10:bh=-0.08",
-    vignette: true,
-    grain: 6,
-    defBars: true,
-  },
-  {
-    key: "hollywood",
-    name: "Hollywood Blockbuster",
-    tagline: "Teal & orange khas poster film Hollywood modern",
-    css: "contrast(1.18) saturate(1.18)",
-    ff: "eq=contrast=1.18:saturation=1.18,colorbalance=bs=0.12:rs=0.06:rh=0.10:gh=-0.02:bh=-0.10",
-    vignette: true,
-    grain: 4,
-    defBars: true,
-  },
-  {
-    key: "noir",
-    name: "Noir Klasik",
-    tagline: "Hitam-putih kontras tinggi dengan grain film",
-    css: "grayscale(1) contrast(1.35) brightness(0.97)",
-    ff: "hue=s=0,eq=contrast=1.35:brightness=-0.03",
-    vignette: true,
-    grain: 9,
-    defBars: true,
-  },
-  {
-    key: "golden",
-    name: "Golden Hour",
-    tagline: "Hangat keemasan lembut, cocok untuk adegan senja",
-    css: "contrast(1.08) saturate(1.12) brightness(1.03) sepia(0.12)",
-    ff: "eq=contrast=1.08:saturation=1.12:brightness=0.03,colorbalance=rs=0.10:gs=0.04:bs=-0.08:rm=0.05:gm=0.02",
-    vignette: true,
-    grain: 3,
-    defBars: false,
-  },
-  {
-    key: "modern",
-    name: "Sinema Modern",
-    tagline: "Nada sejuk minimalis + bar sinema rapi",
-    css: "contrast(1.10) saturate(0.92)",
-    ff: "eq=contrast=1.10:saturation=0.92,colorbalance=bs=0.06:bm=0.02",
-    vignette: false,
-    grain: 0,
-    defBars: true,
-  },
-  {
-    key: "vintage",
-    name: "Vintage Film",
-    tagline: "Warna pudar + grain, nuansa film jadul 80an",
-    css: "contrast(1.05) saturate(0.72) sepia(0.22) brightness(1.02)",
-    ff: "eq=contrast=1.05:saturation=0.72:brightness=0.02,colorbalance=rm=0.08:gm=0.03:bm=-0.05",
-    vignette: true,
-    grain: 8,
-    defBars: false,
-  },
-  {
-    key: "none",
-    name: "Tanpa Efek",
-    tagline: "Warna asli video tanpa perubahan",
-    css: "none",
-    ff: "",
-    vignette: false,
-    grain: 0,
-    defBars: false,
-  },
-];
-
-export function getPreset(k: FramePresetKey): FramePreset {
-  return FRAME_PRESETS.find((p) => p.key === k) ?? FRAME_PRESETS[0];
-}
 
 export const DEFAULT_SETTINGS: Settings = {
   splitMode: "duration",
@@ -163,6 +224,7 @@ export const DEFAULT_SETTINGS: Settings = {
     relX: 0.5,
     relY: 0.055,
     size: 58,
+    font: "anton",
   },
   label: {
     enabled: true,
@@ -172,6 +234,7 @@ export const DEFAULT_SETTINGS: Settings = {
     relX: 0.5,
     relY: 0.14,
     size: 44,
+    font: "montserrat",
   },
   desc: {
     enabled: false,
@@ -179,13 +242,15 @@ export const DEFAULT_SETTINGS: Settings = {
     relX: 0.5,
     relY: 0.86,
     size: 38,
+    font: "carlito",
   },
-  preset: "kolosal",
+  frame: "neon-emas",
   bars: true,
   barSize: "sedang",
   ratio: "full",
   zoom: 1,
   quality: "balanced",
+  parallel: 5,
 };
 
 /** teks label untuk bagian ke-n, mis. "PART 1" */
@@ -284,7 +349,8 @@ function pickText(raw: unknown, def: TextElement): TextElement {
     text: typeof r.text === "string" ? r.text.slice(0, 400) : def.text,
     relX: clamp(Number(r.relX ?? def.relX) || def.relX, 0.02, 0.98),
     relY: clamp(Number(r.relY ?? def.relY) || def.relY, 0.01, 0.99),
-    size: clamp(Number(r.size ?? def.size) || def.size, 24, 110),
+    size: clamp(Number(r.size ?? def.size) || def.size, 24, 120),
+    font: FONT_OPTIONS.some((f) => f.key === r.font) ? (r.font as FontKey) : def.font,
   };
 }
 
@@ -292,9 +358,12 @@ function pickText(raw: unknown, def: TextElement): TextElement {
 export function sanitizeSettings(raw: unknown): Settings {
   const r = (raw ?? {}) as Partial<Settings>;
   const d = DEFAULT_SETTINGS;
-  const preset: FramePresetKey = FRAME_PRESETS.some((p) => p.key === r.preset)
-    ? (r.preset as FramePresetKey)
-    : d.preset;
+  // preset lama (sinema/epik/dll) dipetakan ke gaya frame baru
+  const legacy = r.preset as string | undefined;
+  const frameRaw = (r.frame ?? legacy) as FrameStyleKey | undefined;
+  const frame: FrameStyleKey = FRAME_STYLES.some((f) => f.key === frameRaw)
+    ? (frameRaw as FrameStyleKey)
+    : d.frame;
   const label = pickText(r.label, d.label) as LabelElement;
   label.format = (["part", "bagian", "eps", "episode", "custom"] as LabelFormat[]).includes(
     r.label?.format as LabelFormat
@@ -313,7 +382,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     title: pickText(r.title, d.title),
     label,
     desc: pickText(r.desc, d.desc),
-    preset,
+    frame,
     bars: typeof r.bars === "boolean" ? r.bars : d.bars,
     barSize: (["kecil", "sedang", "besar"] as BarSize[]).includes(r.barSize as BarSize)
       ? (r.barSize as BarSize)
@@ -323,6 +392,9 @@ export function sanitizeSettings(raw: unknown): Settings {
     quality: (["fast", "balanced", "high"] as QualityKey[]).includes(r.quality as QualityKey)
       ? (r.quality as QualityKey)
       : d.quality,
+    parallel: PARALLEL_OPTIONS.includes(Number(r.parallel) as ParallelKey)
+      ? (Number(r.parallel) as ParallelKey)
+      : d.parallel,
   };
 }
 

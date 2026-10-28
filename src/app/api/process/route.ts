@@ -4,7 +4,8 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { sanitizeSettings } from "@/lib/video-config";
 import { jobStore, Job } from "@/lib/server/jobs";
-import { EXPORTS_DIR, runJob, UPLOADS_DIR } from "@/lib/server/ffmpeg";
+import { EXPORTS_DIR, UPLOADS_DIR } from "@/lib/server/ffmpeg";
+import { enqueue, setParallel } from "@/lib/server/queue";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -83,8 +84,9 @@ export async function POST(req: NextRequest) {
     };
     jobStore.set(jobId, job);
 
-    // jalankan di latar belakang tanpa menahan respons
-    void runJob(job);
+    // atur jumlah render paralel lalu masukkan antrean (urutan FIFO)
+    if (body.parallel !== undefined) setParallel(Number(body.parallel));
+    enqueue(job);
 
     return NextResponse.json({ jobId, total: job.total || undefined });
   } catch (e) {
