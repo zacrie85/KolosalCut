@@ -850,7 +850,9 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
         <p className="text-[11px] text-zinc-500 leading-snug">
           {s.parallel === 1
             ? "Satu video dirender pada satu waktu — paling ringan untuk PC lama."
-            : `${s.parallel} video dirender serentak dari antrean impor, urutan tetap dari video pertama.`}
+            : s.parallel === 2
+              ? "Hanya 2 video dirender serentak — begitu satu selesai, antrean berikutnya langsung jalan. Ringan & aman untuk PC."
+              : `${s.parallel} video dirender serentak — makin besar makin berat di PC. Urutan tetap dari video pertama.`}
         </p>
       </Section>
 

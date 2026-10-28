@@ -9,8 +9,8 @@ export type QualityKey = "fast" | "balanced" | "high";
 export type BarSize = "kecil" | "sedang" | "besar";
 
 /** jumlah video yang dirender serentak */
-export type ParallelKey = 1 | 3 | 5 | 7;
-export const PARALLEL_OPTIONS: ParallelKey[] = [1, 3, 5, 7];
+export type ParallelKey = 1 | 2 | 3 | 5 | 7;
+export const PARALLEL_OPTIONS: ParallelKey[] = [1, 2, 3, 5, 7];
 
 // ============================================================
 // FONT SINEMATIK (semua lisensi OFL — bebas dibundel & didistribusikan)
@@ -258,7 +258,10 @@ export const DEFAULT_SETTINGS: Settings = {
   zoom: 1,
   panX: 0.5,
   quality: "balanced",
-  parallel: 5,
+  // v1.3.2: default 2× — antrean panjang (mis. 50 video) hanya memproses
+  // 2 video serentak; selesai satu, langsung lanjut antrean berikutnya.
+  // Aman untuk PC, render tetap mengalir tanpa jeda menunggu pasangan.
+  parallel: 2,
   outputDir: "",
 };
 

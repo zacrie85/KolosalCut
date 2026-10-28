@@ -1,6 +1,6 @@
 # KolosalCut v1.3.2
 
-Perbaikan render: **judul video kini selalu tampil di cover** (tidak ada lagi cover yang hanya bertuliskan "PART 1"), teks judul panjang kini terbungkus rapi persis seperti pratinjau, dan durasi hasil kini **persis sesuai setelan** (tidak ada lagi 2 detik ekstra membeku di ujung tiap bagian).
+Perbaikan render: **judul video kini selalu tampil di cover** (tidak ada lagi cover yang hanya bertuliskan "PART 1"), teks judul panjang kini terbungkus rapi persis seperti pratinjau, dan durasi hasil kini **persis sesuai setelan** (tidak ada lagi 2 detik ekstra membeku di ujung tiap bagian). Ditambah: **render antrean kini default hanya 2 video serentak** agar PC tidak tersiksa saat mengantre puluhan video.
 
 ## Perbaikan 1: Judul Tampil Selalu di Cover
 
@@ -16,6 +16,12 @@ Perbaikan render: **judul video kini selalu tampil di cover** (tidak ada lagi co
 - Sebelumnya tiap bagian hasil **lebih panjang 2 detik** dari seharusnya: cover membeku 1 detik ekstra di akhir, dan isi video membeku 1 detik ekstra di ujung (contoh: setelan cover 2 dtk + potongan 60 dtk menghasilkan file 64 dtk). Penyebabnya filter overlay yang memperpanjang durasi output mengikuti input overlay yang sengaja dibuat lebih panjang.
 - Kini cover berhenti persis di durasi cover dan tiap bagian berhenti persis di titik potong — penjumlahan durasi semua bagian = durasi video sumber + cover.
 - Bonus: indikator progres render kini berjalan mulus sampai 100% tanpa "menggantung" di akhir.
+
+## Baru: Batas Render 2 Video Serentak (Default)
+
+- Sebelumnya setelan "Proses Paralel" default **5** video serentak — mengimpor banyak video sekaligus membuat semua/mayoritas dirender bersamaan dan PC keriting. Pilihan lama juga tidak punya angka 2.
+- Kini pilihan paralel menjadi **1 / 2 / 3 / 5 / 7** dan **default-nya 2×**: hanya 2 video yang dirender serentak, begitu satu selesai, antrean berikutnya langsung mengisi slot kosong — urutan tetap dari video pertama.
+- Uji nyata 6 video sekaligus: puncak render serentak tercatat **2** (tidak pernah lebih), keenam video tuntas berurutan 2-2 sampai selesai. Masih bisa dinaikkan ke 3/5/7 di menu **07 Proses Paralel** bila PC kuat.
 
 ## Cara Upgrade
 
