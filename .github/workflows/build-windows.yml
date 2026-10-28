@@ -71,7 +71,7 @@ jobs:
           Write-Host "Server standalone MERESPONS 200 - paket aman untuk dipaketkan."
 
       - name: Paket instalasi Windows (Electron Builder)
-        run: npx electron-builder --win nsis portable
+        run: npx electron-builder --win nsis portable --publish never
 
       - name: Baca versi aplikasi
         id: ver
