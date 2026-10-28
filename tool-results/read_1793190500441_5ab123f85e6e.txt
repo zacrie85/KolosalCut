@@ -1,0 +1,835 @@
+     1→"use client";
+     2→
+     3→import { useRef, useState } from "react";
+     4→import {
+     5→  Settings,
+     6→  LabelFormat,
+     7→  FRAME_STYLES,
+     8→  FONT_OPTIONS,
+     9→  PARALLEL_OPTIONS,
+    10→  ParallelKey,
+    11→  FontKey,
+    12→  QUALITY_INFO,
+    13→  QualityKey,
+    14→  TextElement,
+    15→} from "@/lib/video-config";
+    16→import { Input } from "@/components/ui/input";
+    17→import { Textarea } from "@/components/ui/textarea";
+    18→import { Label } from "@/components/ui/label";
+    19→import { Switch } from "@/components/ui/switch";
+    20→import { Slider } from "@/components/ui/slider";
+    21→import { Button } from "@/components/ui/button";
+    22→import {
+    23→  Select,
+    24→  SelectContent,
+    25→  SelectItem,
+    26→  SelectTrigger,
+    27→  SelectValue,
+    28→} from "@/components/ui/select";
+    29→import { Separator } from "@/components/ui/separator";
+    30→import {
+    31→  Scissors,
+    32→  Image as ImageIcon,
+    33→  Type,
+    34→  Hash,
+    35→  MessageSquare,
+    36→  Palette,
+    37→  Proportions,
+    38→  Gauge,
+    39→  Move,
+    40→  Layers,
+    41→  ChevronUp,
+    42→  ChevronDown,
+    43→  ChevronLeft,
+    44→  ChevronRight,
+    45→  RotateCcw,
+    46→} from "lucide-react";
+    47→
+    48→type SettingsTab = "video" | "teks" | "gaya";
+    49→
+    50→interface SettingsPanelProps {
+    51→  settings: Settings;
+    52→  onChange: (patch: Partial<Settings>) => void;
+    53→  hasVideo: boolean;
+    54→}
+    55→
+    56→function Section({
+    57→  num,
+    58→  icon,
+    59→  title,
+    60→  children,
+    61→}: {
+    62→  num: string;
+    63→  icon: React.ReactNode;
+    64→  title: string;
+    65→  children: React.ReactNode;
+    66→}) {
+    67→  return (
+    68→    <div className="glass rounded-xl relative overflow-hidden group">
+    69→      <div
+    70→        aria-hidden
+    71→        className="absolute top-0 left-0 h-full w-[2px] bg-gradient-to-b from-cyan-300/70 via-cyan-400/15 to-transparent"
+    72→      />
+    73→      <div className="flex items-center gap-2 px-4 pt-3.5 pb-2">
+    74→        <span className="font-tech text-[10px] text-cyan-400/70" aria-hidden>
+    75→          {num}
+    76→        </span>
+    77→        <span className="text-cyan-300">{icon}</span>
+    78→        <h3 className="font-display text-[11px] font-bold tracking-[0.18em] uppercase text-zinc-100 group-hover:text-cyan-200 transition-colors">
+    79→          {title}
+    80→        </h3>
+    81→      </div>
+    82→      <div className="px-4 pb-4 flex flex-col gap-3">{children}</div>
+    83→    </div>
+    84→  );
+    85→}
+    86→
+    87→const clampX = (v: number) => Math.min(0.98, Math.max(0.02, v));
+    88→const clampY = (v: number) => Math.min(0.99, Math.max(0.01, v));
+    89→
+    90→/**
+    91→ * PositionPad — pengganti pilihan atas/tengah/bawah.
+    92→ * Posisi teks digeser BEBAS ke atas, bawah, kiri, dan kanan lewat:
+    93→ * 1. drag titik di mini-pad 9:16, atau
+    94→ * 2. tombol panah untuk geser halus.
+    95→ */
+    96→function PositionPad({
+    97→  el,
+    98→  onChange,
+    99→  disabled,
+   100→}: {
+   101→  el: TextElement;
+   102→  onChange: (patch: Partial<TextElement>) => void;
+   103→  disabled?: boolean;
+   104→}) {
+   105→  const padRef = useRef<HTMLDivElement>(null);
+   106→  const draggingRef = useRef(false);
+   107→
+   108→  const applyFromPointer = (e: React.PointerEvent<HTMLDivElement>) => {
+   109→    const pad = padRef.current;
+   110→    if (!pad) return;
+   111→    const rect = pad.getBoundingClientRect();
+   112→    const relX = clampX((e.clientX - rect.left) / rect.width);
+   113→    const relY = clampY((e.clientY - rect.top) / rect.height);
+   114→    onChange({ relX, relY });
+   115→  };
+   116→
+   117→  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+   118→    if (disabled) return;
+   119→    e.preventDefault();
+   120→    draggingRef.current = true;
+   121→    e.currentTarget.setPointerCapture(e.pointerId);
+   122→    applyFromPointer(e);
+   123→  };
+   124→
+   125→  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+   126→    if (!draggingRef.current || disabled) return;
+   127→    applyFromPointer(e);
+   128→  };
+   129→
+   130→  const endDrag = () => {
+   131→    draggingRef.current = false;
+   132→  };
+   133→
+   134→  const nudge = (dx: number, dy: number) =>
+   135→    onChange({ relX: clampX(el.relX + dx), relY: clampY(el.relY + dy) });
+   136→
+   137→  const arrowCls =
+   138→    "h-8 w-8 p-0 border-cyan-300/25 text-zinc-300 hover:bg-cyan-400/10 hover:text-cyan-200 hover:border-cyan-300/60 disabled:opacity-40";
+   139→
+   140→  return (
+   141→    <div className="flex items-center gap-3">
+   142→      {/* mini-pad 9:16 — drag bebas */}
+   143→      <div
+   144→        ref={padRef}
+   145→        role="slider"
+   146→        aria-label="Geser posisi teks (atas, bawah, kiri, kanan)"
+   147→        aria-valuemin={0}
+   148→        aria-valuemax={100}
+   149→        aria-valuenow={Math.round(el.relX * 100)}
+   150→        aria-valuetext={`horizontal ${Math.round(el.relX * 100)}%, vertikal ${Math.round(el.relY * 100)}%`}
+   151→        tabIndex={disabled ? -1 : 0}
+   152→        onKeyDown={(e) => {
+   153→          if (disabled) return;
+   154→          const step = e.shiftKey ? 0.06 : 0.02;
+   155→          if (e.key === "ArrowUp") {
+   156→            e.preventDefault();
+   157→            nudge(0, -step);
+   158→          } else if (e.key === "ArrowDown") {
+   159→            e.preventDefault();
+   160→            nudge(0, step);
+   161→          } else if (e.key === "ArrowLeft") {
+   162→            e.preventDefault();
+   163→            nudge(-step, 0);
+   164→          } else if (e.key === "ArrowRight") {
+   165→            e.preventDefault();
+   166→            nudge(step, 0);
+   167→          }
+   168→        }}
+   169→        onPointerDown={onPointerDown}
+   170→        onPointerMove={onPointerMove}
+   171→        onPointerUp={endDrag}
+   172→        onPointerCancel={endDrag}
+   173→        className={`relative shrink-0 w-[72px] aspect-[9/16] rounded-lg border bg-slate-950 touch-none select-none ${
+   174→          disabled ? "border-zinc-800 opacity-50" : "border-cyan-300/35 cursor-grab active:cursor-grabbing shadow-[0_0_14px_-4px_rgba(34,211,238,0.5)]"
+   175→        }`}
+   176→        style={{
+   177→          backgroundImage:
+   178→            "linear-gradient(#27272a 1px, transparent 1px), linear-gradient(90deg, #27272a 1px, transparent 1px)",
+   179→          backgroundSize: "25% 25%",
+   180→        }}
+   181→      >
+   182→        {/* garis tengah horizontal sebagai panduan */}
+   183→        <div className="absolute inset-x-1 top-1/2 border-t border-dashed border-cyan-300/15 pointer-events-none" />
+   184→        {/* titik posisi teks */}
+   185→        <div
+   186→          className="absolute w-5 h-5 rounded-full bg-cyan-400 border-2 border-slate-950 shadow-[0_0_12px_rgba(34,211,238,0.8)] pointer-events-none"
+   187→          style={{
+   188→            left: `${el.relX * 100}%`,
+   189→            top: `${el.relY * 100}%`,
+   190→            transform: "translate(-50%, -50%)",
+   191→          }}
+   192→        />
+   193→      </div>
+   194→
+   195→      {/* tombol panah: geser halus atas bawah kiri kanan */}
+   196→      <div className="flex flex-col items-center gap-1">
+   197→        <Button
+   198→          type="button"
+   199→          size="sm"
+   200→          variant="outline"
+   201→          disabled={disabled}
+   202→          className={arrowCls}
+   203→          aria-label="Geser ke atas"
+   204→          onClick={() => nudge(0, -0.02)}
+   205→        >
+   206→          <ChevronUp className="w-4 h-4" />
+   207→        </Button>
+   208→        <div className="flex gap-1">
+   209→          <Button
+   210→            type="button"
+   211→            size="sm"
+   212→            variant="outline"
+   213→            disabled={disabled}
+   214→            className={arrowCls}
+   215→            aria-label="Geser ke kiri"
+   216→            onClick={() => nudge(-0.02, 0)}
+   217→          >
+   218→            <ChevronLeft className="w-4 h-4" />
+   219→          </Button>
+   220→          <Button
+   221→            type="button"
+   222→            size="sm"
+   223→            variant="outline"
+   224→            disabled={disabled}
+   225→            className="h-8 w-8 p-0 border-cyan-300/25 text-zinc-400 hover:bg-cyan-400/10 hover:text-cyan-200 hover:border-cyan-300/60 disabled:opacity-40"
+   226→            aria-label="Pusatkan horizontal"
+   227→            title="Pusatkan horizontal"
+   228→            onClick={() => onChange({ relX: 0.5 })}
+   229→          >
+   230→            <RotateCcw className="w-3.5 h-3.5" />
+   231→          </Button>
+   232→          <Button
+   233→            type="button"
+   234→            size="sm"
+   235→            variant="outline"
+   236→            disabled={disabled}
+   237→            className={arrowCls}
+   238→            aria-label="Geser ke kanan"
+   239→            onClick={() => nudge(0.02, 0)}
+   240→          >
+   241→            <ChevronRight className="w-4 h-4" />
+   242→          </Button>
+   243→        </div>
+   244→        <Button
+   245→          type="button"
+   246→          size="sm"
+   247→          variant="outline"
+   248→          disabled={disabled}
+   249→          className={arrowCls}
+   250→          aria-label="Geser ke bawah"
+   251→          onClick={() => nudge(0, 0.02)}
+   252→        >
+   253→          <ChevronDown className="w-4 h-4" />
+   254→        </Button>
+   255→      </div>
+   256→
+   257→      {/* readout posisi */}
+   258→      <div className="flex-1 min-w-0">
+   259→        <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+   260→          <Move className="w-3.5 h-3.5 text-cyan-300 shrink-0" aria-hidden />
+   261→          <span className="tabular-nums">
+   262→            X {Math.round(el.relX * 100)}% · Y {Math.round(el.relY * 100)}%
+   263→          </span>
+   264→        </div>
+   265→        <p className="text-[11px] text-zinc-500 leading-snug mt-1">
+   266→          Geser titik di kotak mini (bebas semua arah) atau pakai tombol panah. Bisa juga geser
+   267→          langsung teksnya di pratinjau video.
+   268→        </p>
+   269→      </div>
+   270→    </div>
+   271→  );
+   272→}
+   273→
+   274→export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanelProps) {
+   275→  const setEl =
+   276→    (key: "title" | "label" | "desc") =>
+   277→    (patch: Partial<TextElement>) => {
+   278→      onChange({ [key]: { ...s[key], ...patch } } as Partial<Settings>);
+   279→    };
+   280→  const setSize =
+   281→    (key: "title" | "label" | "desc") =>
+   282→    (v: number[]) => {
+   283→      onChange({ [key]: { ...s[key], size: v[0] } } as Partial<Settings>);
+   284→    };
+   285→
+   286→  const disabled = !hasVideo;
+   287→  const [tab, setTab] = useState<SettingsTab>("video");
+   288→
+   289→  /** pilihan font dengan contoh tulisan memakai font aslinya */
+   290→  const fontSelect = (
+   291→    key: "title" | "label" | "desc",
+   292→    el: TextElement
+   293→  ) => (
+   294→    <div className="flex items-center gap-2">
+   295→      <Label className="text-xs text-zinc-400 shrink-0">Font</Label>
+   296→      <Select
+   297→        value={el.font}
+   298→        disabled={disabled}
+   299→        onValueChange={(v) => setEl(key)({ font: v as FontKey })}
+   300→      >
+   301→        <SelectTrigger className="h-8 flex-1 bg-zinc-950 border-zinc-700 text-xs">
+   302→          <SelectValue />
+   303→        </SelectTrigger>
+   304→        <SelectContent>
+   305→          {FONT_OPTIONS.map((f) => (
+   306→            <SelectItem key={f.key} value={f.key} style={{ fontFamily: `"${f.css}", sans-serif` }}>
+   307→              {f.name}
+   308→            </SelectItem>
+   309→          ))}
+   310→        </SelectContent>
+   311→      </Select>
+   312→    </div>
+   313→  );
+   314→
+   315→  return (
+   316→    <div className="flex flex-col gap-3 flex-1 min-h-0">
+   317→      {/* ===== TAB PILIHAN — ala panel referensi (Video / Animation / Tracking) ===== */}
+   318→      <div
+   319→        role="tablist"
+   320→        aria-label="Kelompok pengaturan"
+   321→        className="shrink-0 grid grid-cols-3 gap-1 rounded-xl border border-cyan-300/20 bg-slate-950/60 p-1"
+   322→      >
+   323→        {(
+   324→          [
+   325→            { key: "video", label: "Video", icon: <Scissors className="w-3.5 h-3.5" /> },
+   326→            { key: "teks", label: "Teks", icon: <Type className="w-3.5 h-3.5" /> },
+   327→            { key: "gaya", label: "Gaya", icon: <Palette className="w-3.5 h-3.5" /> },
+   328→          ] as Array<{ key: SettingsTab; label: string; icon: React.ReactNode }>
+   329→        ).map((t) => (
+   330→          <button
+   331→            key={t.key}
+   332→            type="button"
+   333→            role="tab"
+   334→            aria-selected={tab === t.key}
+   335→            onClick={() => setTab(t.key)}
+   336→            className={`h-8 rounded-lg font-display text-[10px] font-bold tracking-[0.14em] uppercase flex items-center justify-center gap-1.5 transition-all ${
+   337→              tab === t.key
+   338→                ? "bg-gradient-to-r from-cyan-500/85 to-indigo-500/85 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.4)]"
+   339→                : "text-zinc-400 hover:text-cyan-200 hover:bg-cyan-400/5"
+   340→            }`}
+   341→          >
+   342→            {t.icon}
+   343→            {t.label}
+   344→          </button>
+   345→        ))}
+   346→      </div>
+   347→
+   348→      <div className="flex-1 min-h-0 overflow-y-auto kolosal-scroll lg:pr-1 flex flex-col gap-3 pb-1">
+   349→      {tab === "video" && (
+   350→      <>
+   351→      {/* ===== PEMOTONGAN ===== */}
+   352→      <Section num="01" icon={<Scissors className="w-4 h-4" />} title="Pemotongan Video">
+   353→        <div className="flex gap-1.5">
+   354→          <Button
+   355→            size="sm"
+   356→            disabled={disabled}
+   357→            variant={s.splitMode === "duration" ? "default" : "outline"}
+   358→            className={`h-8 flex-1 text-xs ${s.splitMode === "duration" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
+   359→            onClick={() => onChange({ splitMode: "duration" })}
+   360→          >
+   361→            Per Durasi (detik)
+   362→          </Button>
+   363→          <Button
+   364→            size="sm"
+   365→            disabled={disabled}
+   366→            variant={s.splitMode === "parts" ? "default" : "outline"}
+   367→            className={`h-8 flex-1 text-xs ${s.splitMode === "parts" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
+   368→            onClick={() => onChange({ splitMode: "parts" })}
+   369→          >
+   370→            Per Jumlah Bagian
+   371→          </Button>
+   372→        </div>
+   373→        {s.splitMode === "duration" ? (
+   374→          <div className="flex flex-col gap-2">
+   375→            <Label htmlFor="split-sec" className="text-xs text-zinc-400">
+   376→              Durasi setiap bagian (detik)
+   377→            </Label>
+   378→            <div className="flex gap-2">
+   379→              <Input
+   380→                id="split-sec"
+   381→                type="number"
+   382→                min={3}
+   383→                max={3600}
+   384→                value={s.splitSeconds}
+   385→                disabled={disabled}
+   386→                onChange={(e) =>
+   387→                  onChange({ splitSeconds: Math.max(3, Math.min(3600, Number(e.target.value) || 3)) })
+   388→                }
+   389→                className="h-9 bg-zinc-950 border-zinc-700"
+   390→              />
+   391→              <div className="flex gap-1">
+   392→                {[30, 60, 90].map((v) => (
+   393→                  <Button
+   394→                    key={v}
+   395→                    size="sm"
+   396→                    variant="outline"
+   397→                    disabled={disabled}
+   398→                    className="h-9 px-2 text-xs border-zinc-700 text-zinc-300"
+   399→                    onClick={() => onChange({ splitSeconds: v })}
+   400→                  >
+   401→                    {v}s
+   402→                  </Button>
+   403→                ))}
+   404→              </div>
+   405→            </div>
+   406→          </div>
+   407→        ) : (
+   408→          <div className="flex flex-col gap-2">
+   409→            <Label htmlFor="split-n" className="text-xs text-zinc-400">
+   410→              Jumlah bagian yang diinginkan
+   411→            </Label>
+   412→            <Input
+   413→              id="split-n"
+   414→              type="number"
+   415→              min={1}
+   416→              max={50}
+   417→              value={s.splitParts}
+   418→              disabled={disabled}
+   419→              onChange={(e) =>
+   420→                onChange({ splitParts: Math.max(1, Math.min(50, Math.round(Number(e.target.value) || 1))) })
+   421→              }
+   422→              className="h-9 bg-zinc-950 border-zinc-700"
+   423→            />
+   424→          </div>
+   425→        )}
+   426→      </Section>
+   427→
+   428→      {/* ===== COVER ===== */}
+   429→      <Section num="02" icon={<ImageIcon className="w-4 h-4" />} title="Cover Tiap Bagian">
+   430→        <div className="flex items-center justify-between">
+   431→          <Label htmlFor="cover-on" className="text-xs text-zinc-300">
+   432→            Tambahkan cover otomatis
+   433→          </Label>
+   434→          <Switch
+   435→            id="cover-on"
+   436→            checked={s.coverEnabled}
+   437→            disabled={disabled}
+   438→            onCheckedChange={(v) => onChange({ coverEnabled: v })}
+   439→          />
+   440→        </div>
+   441→        {s.coverEnabled && (
+   442→          <>
+   443→            <div className="flex gap-1.5">
+   444→              <Button
+   445→                size="sm"
+   446→                disabled={disabled}
+   447→                variant={!s.coverSame ? "default" : "outline"}
+   448→                className={`h-8 flex-1 text-xs ${!s.coverSame ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
+   449→                onClick={() => onChange({ coverSame: false })}
+   450→              >
+   451→                Cover Berbeda
+   452→              </Button>
+   453→              <Button
+   454→                size="sm"
+   455→                disabled={disabled}
+   456→                variant={s.coverSame ? "default" : "outline"}
+   457→                className={`h-8 flex-1 text-xs ${s.coverSame ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
+   458→                onClick={() => onChange({ coverSame: true })}
+   459→              >
+   460→                Cover Sama Semua
+   461→              </Button>
+   462→            </div>
+   463→            <div className="flex items-center gap-3">
+   464→              <Label className="text-xs text-zinc-400 shrink-0">Durasi cover:</Label>
+   465→              <div className="flex gap-1.5">
+   466→                {[2, 3].map((v) => (
+   467→                  <Button
+   468→                    key={v}
+   469→                    size="sm"
+   470→                    disabled={disabled}
+   471→                    variant={s.coverDuration === v ? "default" : "outline"}
+   472→                    className={`h-7 px-3 text-xs ${s.coverDuration === v ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
+   473→                    onClick={() => onChange({ coverDuration: v })}
+   474→                  >
+   475→                    {v} detik
+   476→                  </Button>
+   477→                ))}
+   478→              </div>
+   479→              <span className="text-[11px] text-zinc-500 tabular-nums ml-auto">
+   480→                manual: {s.coverDuration.toFixed(1)}s
+   481→              </span>
+   482→            </div>
+   483→            <Slider
+   484→              value={[s.coverDuration]}
+   485→              min={1}
+   486→              max={5}
+   487→              step={0.5}
+   488→              disabled={disabled}
+   489→              onValueChange={(v) => onChange({ coverDuration: v[0] })}
+   490→            />
+   491→            <div className="flex items-center justify-between">
+   492→              <Label className="text-xs text-zinc-400">Posisi frame cover</Label>
+   493→              <Select
+   494→                value={s.coverPos}
+   495→                disabled={disabled}
+   496→                onValueChange={(v) => onChange({ coverPos: v as "awal" | "tengah" })}
+   497→              >
+   498→                <SelectTrigger className="h-8 w-[150px] bg-zinc-950 border-zinc-700 text-xs">
+   499→                  <SelectValue />
+   500→                </SelectTrigger>
+   501→                <SelectContent>
+   502→                  <SelectItem value="awal">Awal bagian</SelectItem>
+   503→                  <SelectItem value="tengah">Tengah bagian</SelectItem>
+   504→                </SelectContent>
+   505→              </Select>
+   506→            </div>
+   507→            <p className="text-[11px] text-zinc-500 leading-snug">
+   508→              {s.coverSame
+   509→                ? "Semua cover memakai frame yang sama (awal video), hanya label bagian yang berbeda."
+   510→                : "Setiap bagian memakai frame dari segmennya sendiri."}
+   511→            </p>
+   512→          </>
+   513→        )}
+   514→      </Section>
+   515→      </>
+   516→      )}
+   517→
+   518→      {tab === "teks" && (
+   519→      <>
+   520→        <p className="text-[11px] text-cyan-100/60 leading-snug rounded-lg border border-cyan-300/15 bg-cyan-400/5 px-3 py-2">
+   521→          Tips: posisi tiap teks bisa digeser langsung dengan menyeretnya di pratinjau, atau pakai
+   522→          pad mini & tombol panah di bawah tiap teks.
+   523→        </p>
+   524→
+   525→      {/* ===== JUDUL ===== */}
+   526→      <Section num="03" icon={<Type className="w-4 h-4" />} title="Judul Video (dari nama file)">
+   527→        <div className="flex items-center justify-between">
+   528→          <Label htmlFor="title-on" className="text-xs text-zinc-300">
+   529→            Tampilkan judul
+   530→          </Label>
+   531→          <Switch
+   532→            id="title-on"
+   533→            checked={s.title.enabled}
+   534→            onCheckedChange={(v) => onChange({ title: { ...s.title, enabled: v } })}
+   535→          />
+   536→        </div>
+   537→        <Input
+   538→          value={s.title.text}
+   539→          disabled={disabled}
+   540→          onChange={(e) => onChange({ title: { ...s.title, text: e.target.value } })}
+   541→          placeholder="Isi otomatis dari nama file..."
+   542→          className="h-9 bg-zinc-950 border-zinc-700 text-sm"
+   543→        />
+   544→        {fontSelect("title", s.title)}
+   545→        <PositionPad el={s.title} onChange={setEl("title")} disabled={disabled} />
+   546→        <div className="flex items-center gap-3">
+   547→          <Label className="text-xs text-zinc-400 shrink-0">Ukuran</Label>
+   548→          <Slider
+   549→            value={[s.title.size]}
+   550→            min={24}
+   551→            max={120}
+   552→            step={2}
+   553→            disabled={disabled}
+   554→            onValueChange={setSize("title")}
+   555→            className="flex-1"
+   556→          />
+   557→          <span className="text-[11px] text-zinc-500 tabular-nums w-7">{s.title.size}px</span>
+   558→        </div>
+   559→      </Section>
+   560→
+   561→      {/* ===== LABEL BAGIAN ===== */}
+   562→      <Section num="04" icon={<Hash className="w-4 h-4" />} title="Label Part / Bagian / Eps">
+   563→        <div className="flex items-center justify-between">
+   564→          <Label htmlFor="label-on" className="text-xs text-zinc-300">
+   565→            Tampilkan label urutan
+   566→          </Label>
+   567→          <Switch
+   568→            id="label-on"
+   569→            checked={s.label.enabled}
+   570→            onCheckedChange={(v) => onChange({ label: { ...s.label, enabled: v } })}
+   571→          />
+   572→        </div>
+   573→        <div className="flex gap-2">
+   574→          <Select
+   575→            value={s.label.format}
+   576→            disabled={disabled}
+   577→            onValueChange={(v) => onChange({ label: { ...s.label, format: v as LabelFormat } })}
+   578→          >
+   579→            <SelectTrigger className="h-9 flex-1 bg-zinc-950 border-zinc-700 text-sm">
+   580→              <SelectValue />
+   581→            </SelectTrigger>
+   582→            <SelectContent>
+   583→              <SelectItem value="part">Part 1, Part 2, ...</SelectItem>
+   584→              <SelectItem value="bagian">Bagian 1, Bagian 2, ...</SelectItem>
+   585→              <SelectItem value="eps">EPS 1, EPS 2, ...</SelectItem>
+   586→              <SelectItem value="episode">Episode 1, Episode 2, ...</SelectItem>
+   587→              <SelectItem value="custom">Kustom...</SelectItem>
+   588→            </SelectContent>
+   589→          </Select>
+   590→          {s.label.format === "custom" && (
+   591→            <Input
+   592→              value={s.label.prefix}
+   593→              disabled={disabled}
+   594→              onChange={(e) => onChange({ label: { ...s.label, prefix: e.target.value } })}
+   595→              placeholder="BAGIAN KE-{n}"
+   596→              className="h-9 w-[130px] bg-zinc-950 border-zinc-700 text-sm"
+   597→            />
+   598→          )}
+   599→        </div>
+   600→        <PositionPad el={s.label} onChange={setEl("label")} disabled={disabled} />
+   601→        {fontSelect("label", s.label)}
+   602→        <div className="flex items-center gap-3">
+   603→          <Label className="text-xs text-zinc-400 shrink-0">Ukuran</Label>
+   604→          <Slider
+   605→            value={[s.label.size]}
+   606→            min={24}
+   607→            max={120}
+   608→            step={2}
+   609→            disabled={disabled}
+   610→            onValueChange={setSize("label")}
+   611→            className="flex-1"
+   612→          />
+   613→          <span className="text-[11px] text-zinc-500 tabular-nums w-7">{s.label.size}px</span>
+   614→        </div>
+   615→      </Section>
+   616→
+   617→      {/* ===== DESKRIPSI ===== */}
+   618→      <Section num="05" icon={<MessageSquare className="w-4 h-4" />} title="Deskripsi dalam Video">
+   619→        <div className="flex items-center justify-between">
+   620→          <Label htmlFor="desc-on" className="text-xs text-zinc-300">
+   621→            Tampilkan deskripsi
+   622→          </Label>
+   623→          <Switch
+   624→            id="desc-on"
+   625→            checked={s.desc.enabled}
+   626→            onCheckedChange={(v) => onChange({ desc: { ...s.desc, enabled: v } })}
+   627→          />
+   628→        </div>
+   629→        <Textarea
+   630→          value={s.desc.text}
+   631→          disabled={disabled}
+   632→          onChange={(e) => onChange({ desc: { ...s.desc, text: e.target.value } })}
+   633→          placeholder="Tulis keterangan / deskripsi yang muncul di dalam video... (maks 6 baris)"
+   634→          rows={3}
+   635→          className="bg-zinc-950 border-zinc-700 text-sm resize-none"
+   636→        />
+   637→        <PositionPad el={s.desc} onChange={setEl("desc")} disabled={disabled} />
+   638→        {fontSelect("desc", s.desc)}
+   639→        <div className="flex items-center gap-3">
+   640→          <Label className="text-xs text-zinc-400 shrink-0">Ukuran</Label>
+   641→          <Slider
+   642→            value={[s.desc.size]}
+   643→            min={24}
+   644→            max={120}
+   645→            step={2}
+   646→            disabled={disabled}
+   647→            onValueChange={setSize("desc")}
+   648→            className="flex-1"
+   649→          />
+   650→          <span className="text-[11px] text-zinc-500 tabular-nums w-7">{s.desc.size}px</span>
+   651→        </div>
+   652→      </Section>
+   653→      </>
+   654→      )}
+   655→
+   656→      {tab === "gaya" && (
+   657→      <>
+   658→
+   659→      {/* ===== GAYA FRAME ===== */}
+   660→      <Section num="06" icon={<Layers className="w-4 h-4" />} title="Gaya Frame Film">
+   661→        <div className="grid grid-cols-2 gap-1.5 max-h-[300px] overflow-y-auto kolosal-scroll pr-1">
+   662→          {FRAME_STYLES.map((p) => (
+   663→            <button
+   664→              key={p.key}
+   665→              type="button"
+   666→              disabled={disabled}
+   667→              onClick={() => onChange({ frame: p.key, bars: p.defBars })}
+   668→              className={`text-left rounded-lg border p-2 flex gap-2 items-center transition-colors disabled:opacity-50 ${
+   669→                s.frame === p.key
+   670→                  ? "border-cyan-300/60 bg-cyan-400/10 shadow-[0_0_14px_-4px_rgba(34,211,238,0.6)]"
+   671→                  : "border-zinc-700/70 bg-zinc-950 hover:border-zinc-500"
+   672→              }`}
+   673→            >
+   674→              <span className="shrink-0 relative w-[30px] h-[53px] rounded-md overflow-hidden bg-black border border-zinc-700 flex items-center justify-center">
+   675→                {p.preview ? (
+   676→                  <img
+   677→                    src={p.preview}
+   678→                    alt=""
+   679→                    aria-hidden
+   680→                    className="absolute inset-0 w-full h-full object-cover"
+   681→                    loading="lazy"
+   682→                  />
+   683→                ) : (
+   684→                  <span className="text-[8px] text-zinc-500 font-tech">OFF</span>
+   685→                )}
+   686→              </span>
+   687→              <span className="min-w-0">
+   688→                <span
+   689→                  className={`block text-[11px] font-semibold leading-tight ${
+   690→                    s.frame === p.key ? "text-cyan-200" : "text-zinc-200"
+   691→                  }`}
+   692→                >
+   693→                  {p.name}
+   694→                </span>
+   695→                <span className="block text-[10px] text-zinc-500 leading-snug mt-0.5 line-clamp-2">
+   696→                  {p.tagline}
+   697→                </span>
+   698→              </span>
+   699→            </button>
+   700→          ))}
+   701→        </div>
+   702→        <p className="text-[11px] text-zinc-500 leading-snug">
+   703→          Frame neon berputar beranimasi pada hasil ekspor (pratinjau menampilkan animasi asli).
+   704→        </p>
+   705→        <Separator className="bg-zinc-800" />
+   706→        <div className="flex items-center justify-between">
+   707→          <Label htmlFor="bars-on" className="text-xs text-zinc-300">
+   708→            Bar sinema (hitam atas-bawah)
+   709→          </Label>
+   710→          <Switch
+   711→            id="bars-on"
+   712→            checked={s.bars}
+   713→            disabled={disabled}
+   714→            onCheckedChange={(v) => onChange({ bars: v })}
+   715→          />
+   716→        </div>
+   717→        {s.bars && (
+   718→          <div className="flex gap-1.5">
+   719→            {(["kecil", "sedang", "besar"] as const).map((b) => (
+   720→              <Button
+   721→                key={b}
+   722→                size="sm"
+   723→                disabled={disabled}
+   724→                variant={s.barSize === b ? "default" : "outline"}
+   725→                className={`h-7 flex-1 text-xs capitalize ${s.barSize === b ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
+   726→                onClick={() => onChange({ barSize: b })}
+   727→              >
+   728→                {b}
+   729→              </Button>
+   730→            ))}
+   731→          </div>
+   732→        )}
+   733→      </Section>
+   734→
+   735→      {/* ===== RASIO & ZOOM ===== */}
+   736→      <Section num="07" icon={<Proportions className="w-4 h-4" />} title="Rasio & Zoom">
+   737→        <div className="flex gap-1.5">
+   738→          <Button
+   739→            size="sm"
+   740→            disabled={disabled}
+   741→            variant={s.ratio === "full" ? "default" : "outline"}
+   742→            className={`h-8 flex-1 text-xs ${s.ratio === "full" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
+   743→            onClick={() => onChange({ ratio: "full" })}
+   744→          >
+   745→            9:16 Penuh
+   746→          </Button>
+   747→          <Button
+   748→            size="sm"
+   749→            disabled={disabled}
+   750→            variant={s.ratio === "fit" ? "default" : "outline"}
+   751→            className={`h-8 flex-1 text-xs ${s.ratio === "fit" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
+   752→            onClick={() => onChange({ ratio: "fit" })}
+   753→          >
+   754→            9:16 Biasa + Blur
+   755→          </Button>
+   756→        </div>
+   757→        <div className="flex items-center gap-3">
+   758→          <Label className="text-xs text-zinc-400 shrink-0">Zoom</Label>
+   759→          <Slider
+   760→            value={[s.zoom]}
+   761→            min={1}
+   762→            max={2.5}
+   763→            step={0.05}
+   764→            disabled={disabled}
+   765→            onValueChange={(v) => onChange({ zoom: v[0] })}
+   766→            className="flex-1"
+   767→          />
+   768→          <span className="text-[11px] text-zinc-500 tabular-nums w-8">
+   769→            {s.zoom.toFixed(2)}×
+   770→          </span>
+   771→        </div>
+   772→        <p className="text-[11px] text-zinc-500 leading-snug">
+   773→          {s.ratio === "full"
+   774→            ? "9:16 Penuh: video memenuhi layar (bagian yang tidak muat dipotong)."
+   775→            : "9:16 Biasa: video utuh di tengah dengan latar blur; perbesar dengan zoom."}
+   776→        </p>
+   777→      </Section>
+   778→      </>
+   779→      )}
+   780→
+   781→      {tab === "video" && (
+   782→      <>
+   783→
+   784→      {/* ===== RENDER PARALEL ===== */}
+   785→      <Section num="07" icon={<Layers className="w-4 h-4" />} title="Proses Paralel">
+   786→        <div className="flex gap-1.5">
+   787→          {PARALLEL_OPTIONS.map((n) => (
+   788→            <Button
+   789→              key={n}
+   790→              size="sm"
+   791→              disabled={disabled}
+   792→              variant={s.parallel === n ? "default" : "outline"}
+   793→              className={`h-8 flex-1 text-xs ${
+   794→                s.parallel === n
+   795→                  ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]"
+   796→                  : "border-zinc-700 text-zinc-300"
+   797→              }`}
+   798→              onClick={() => onChange({ parallel: n as ParallelKey })}
+   799→            >
+   800→              {n}×
+   801→            </Button>
+   802→          ))}
+   803→        </div>
+   804→        <p className="text-[11px] text-zinc-500 leading-snug">
+   805→          {s.parallel === 1
+   806→            ? "Satu video dirender pada satu waktu — paling ringan untuk PC lama."
+   807→            : `${s.parallel} video dirender serentak dari antrean impor, urutan tetap dari video pertama.`}
+   808→        </p>
+   809→      </Section>
+   810→
+   811→      {/* ===== KUALITAS ===== */}
+   812→      <Section num="08" icon={<Gauge className="w-4 h-4" />} title="Kualitas Render">
+   813→        <div className="flex gap-1.5">
+   814→          {(Object.keys(QUALITY_INFO) as QualityKey[]).map((k) => (
+   815→            <Button
+   816→              key={k}
+   817→              size="sm"
+   818→              disabled={disabled}
+   819→              variant={s.quality === k ? "default" : "outline"}
+   820→              className={`h-8 flex-1 text-xs ${s.quality === k ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
+   821→              onClick={() => onChange({ quality: k })}
+   822→            >
+   823→              {QUALITY_INFO[k].label}
+   824→            </Button>
+   825→          ))}
+   826→        </div>
+   827→        <p className="text-[11px] text-zinc-500">{QUALITY_INFO[s.quality].desc}</p>
+   828→      </Section>
+   829→      </>
+   830→      )}
+   831→      </div>
+   832→    </div>
+   833→  );
+   834→}
+   835→
