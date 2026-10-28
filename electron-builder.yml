@@ -1,0 +1,39 @@
+appId: app.kolosalcut.desktop
+productName: KolosalCut
+directories:
+  output: release
+  buildResources: build
+asar: true
+files:
+  - electron/main.js
+  - package.json
+extraResources:
+  # Binary FFmpeg/FFprobe Windows (diunduh oleh CI, tidak ikut repo)
+  - from: resources/bin
+    to: bin
+  # Font untuk teks sinematik pada video
+  - from: resources/fonts
+    to: fonts
+  # Ikon untuk jendela aplikasi
+  - from: build/icon.ico
+    to: app.ico
+  # Server Next.js standalone hasil build + aset statisnya
+  - from: .next/standalone
+    to: app-standalone
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  runAfterFinish: true
+  artifactName: KolosalCut-Setup-${version}.exe
+portable:
+  artifactName: KolosalCut-Portable-${version}.exe
+compression: maximum

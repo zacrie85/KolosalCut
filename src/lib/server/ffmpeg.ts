@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
+import os from "os";
 import path from "path";
 import {
   Settings,
@@ -14,9 +15,24 @@ import {
 } from "@/lib/video-config";
 import { Job, VideoInfo } from "@/lib/server/jobs";
 
-export const UPLOADS_DIR = "/home/z/my-project/uploads";
-export const EXPORTS_DIR = "/home/z/my-project/exports";
-const FONT = "/usr/share/fonts/truetype/english/Carlito-Bold.ttf";
+// Direktori data (unggahan & hasil render). Pada versi desktop Windows, nilai ini
+// dialihkan lewat env KOLOSAL_DATA_DIR agar selalu berada di folder yang dapat ditulis.
+const DATA_DIR =
+  process.env.KOLOSAL_DATA_DIR || path.join(os.tmpdir(), "kolosalcut-data");
+export const UPLOADS_DIR = path.join(DATA_DIR, "uploads");
+export const EXPORTS_DIR = path.join(DATA_DIR, "exports");
+
+// Lokasi binary FFmpeg & font teks — dapat dialihkan lewat env pada versi desktop.
+const FFMPEG_BIN = process.env.FFMPEG_PATH || "ffmpeg";
+const FFPROBE_BIN = process.env.FFPROBE_PATH || "ffprobe";
+const FONT =
+  process.env.FFMPEG_FONT ||
+  "/usr/share/fonts/truetype/english/Carlito-Bold.ttf";
+
+/** Escape path agar aman dipakai di dalam filter FFmpeg (termasuk path Windows C:\...). */
+function escFilterPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
+}
 
 const QUALITY: Record<QualityKey, { preset: string; crf: number }> = {
   fast: { preset: "ultrafast", crf: 26 },
@@ -38,7 +54,7 @@ function even(n: number): number {
 // ============================================================
 export async function probeVideo(p: string): Promise<VideoInfo> {
   const raw = await new Promise<string>((resolve, reject) => {
-    const proc = spawn("ffprobe", [
+    const proc = spawn(FFPROBE_BIN, [
       "-v", "error",
       "-print_format", "json",
       "-show_format",
@@ -85,7 +101,7 @@ async function runFfmpeg(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const full = [...args, "-progress", "pipe:1", "-nostats"];
-    const proc = spawn("ffmpeg", full);
+    const proc = spawn(FFMPEG_BIN, full);
     let stderr = "";
     let lastFrac = 0;
     proc.stderr.on("data", (d) => {
@@ -163,7 +179,7 @@ function textFilters(
     const px = Math.round(el.size);
     const bw = Math.max(2, Math.round(px * 0.055));
     const ls = Math.round(px * 0.32);
-    let opts = `drawtext=fontfile=${FONT}:textfile=${file}:fontsize=${px}:line_spacing=${ls}`;
+    let opts = `drawtext=fontfile='${escFilterPath(FONT)}':textfile='${escFilterPath(file)}':fontsize=${px}:line_spacing=${ls}`;
     if (style === "title") {
       opts += `:fontcolor=white:borderw=${bw}:bordercolor=black@0.85:shadowx=2:shadowy=3:shadowcolor=black@0.45`;
     } else if (style === "label") {
