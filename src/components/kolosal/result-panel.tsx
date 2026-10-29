@@ -41,7 +41,12 @@ export function ResultPanel({ job }: ResultPanelProps) {
   // tombol buka folder hanya aktif di aplikasi desktop (Electron)
   const [canOpenFolder, setCanOpenFolder] = useState(false);
   useEffect(() => {
-    setCanOpenFolder(typeof window.kolosalAPI?.openPath === "function");
+    // dicek pasca-render via timeout — hindari setState sinkron dalam efek
+    const id = setTimeout(
+      () => setCanOpenFolder(typeof window.kolosalAPI?.openPath === "function"),
+      0
+    );
+    return () => clearTimeout(id);
   }, []);
 
   if (!job) return null;

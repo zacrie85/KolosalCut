@@ -13,6 +13,46 @@ export type ParallelKey = 1 | 2 | 3 | 5 | 7;
 export const PARALLEL_OPTIONS: ParallelKey[] = [1, 2, 3, 5, 7];
 
 // ============================================================
+// TEKS OTOMATIS (v1.3.3) — suara → teks via Whisper (offline)
+// Fokus Bahasa Indonesia (resmi & slang). Tiga mode kecepatan.
+// ============================================================
+export type SubMode = "sangat-cepat" | "cepat" | "akurat";
+
+export interface SubtitleSettings {
+  /** aktif/nonaktif per video — dipilih manual oleh pengguna */
+  enabled: boolean;
+  /** kecepatan vs akurasi pembacaan suara */
+  mode: SubMode;
+  /** gaya tampilan teks pada video */
+  style: SubStyle;
+}
+
+export type SubStyle = "klasik" | "tiktok" | "karaoke";
+
+export const SUB_STYLES_INFO: Record<SubStyle, { label: string; desc: string }> = {
+  klasik: { label: "Klasik", desc: "Teks putih di bawah, seperti film" },
+  tiktok: { label: "TikTok", desc: "Teks besar rata tengah dengan latar gelap" },
+  karaoke: { label: "Karaoke", desc: "Kata yang diucap menyala satu per satu" },
+};
+export const SUB_STYLE_KEYS: SubStyle[] = ["klasik", "tiktok", "karaoke"];
+
+export const SUB_MODES_INFO: Record<SubMode, { label: string; desc: string }> = {
+  "sangat-cepat": {
+    label: "Sangat Cepat",
+    desc: "Paling kilat — cocok untuk suara sangat jelas, akurasi dasar",
+  },
+  cepat: {
+    label: "Cepat",
+    desc: "Hasil cepat, rata-rata bagus (cocok untuk video jelas)",
+  },
+  akurat: {
+    label: "Akurat",
+    desc: "Lebih teliti untuk audio berisik/banyak istilah, agak lama",
+  },
+};
+export const SUB_MODE_KEYS: SubMode[] = ["sangat-cepat", "cepat", "akurat"];
+
+// ============================================================
 // FONT SINEMATIK (semua lisensi OFL — bebas dibundel & didistribusikan)
 // ============================================================
 export type FontKey =
@@ -205,6 +245,8 @@ export interface Settings {
   parallel: ParallelKey;
   /** folder penyimpanan hasil render & split (kosong = folder bawaan aplikasi) */
   outputDir: string;
+  /** teks otomatis dari suara (Whisper, Bahasa Indonesia) — v1.3.3 */
+  subtitle: SubtitleSettings;
 }
 
 /** batas maksimal bagian per video */
@@ -263,6 +305,8 @@ export const DEFAULT_SETTINGS: Settings = {
   // Aman untuk PC, render tetap mengalir tanpa jeda menunggu pasangan.
   parallel: 2,
   outputDir: "",
+  // v1.3.3: teks otomatis MATI secara bawaan — pengguna memilih per video
+  subtitle: { enabled: false, mode: "cepat", style: "tiktok" },
 };
 
 /** teks label untuk bagian ke-n, mis. "PART 1" */
@@ -412,6 +456,15 @@ export function sanitizeSettings(raw: unknown): Settings {
       typeof r.outputDir === "string"
         ? r.outputDir.trim().slice(0, 500)
         : d.outputDir,
+    subtitle: {
+      enabled: typeof r.subtitle?.enabled === "boolean" ? r.subtitle.enabled : d.subtitle.enabled,
+      mode: SUB_MODE_KEYS.includes(r.subtitle?.mode as SubMode)
+        ? (r.subtitle!.mode as SubMode)
+        : d.subtitle.mode,
+      style: SUB_STYLE_KEYS.includes(r.subtitle?.style as SubStyle)
+        ? (r.subtitle!.style as SubStyle)
+        : d.subtitle.style,
+    },
   };
 }
 

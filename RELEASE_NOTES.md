@@ -1,3 +1,38 @@
+# KolosalCut v1.3.3
+
+Fitur baru besar: **TEKS OTOMATIS (SUARA → TEKS)** — setiap ucapan di video otomatis menjadi teks yang menempel pas dengan suaranya, seperti caption TikTok. Berjalan **100% offline** di PC-mu (tanpa internet), difokuskan untuk **Bahasa Indonesia (resmi & slang)**.
+
+## Baru: Teks Otomatis dari Suara (Whisper Offline)
+
+- Buka menu **10 Teks Otomatis (Suara → Teks)** → nyalakan **"Buat teks dari suara video ini"** → proses seperti biasa. Setiap bagian hasil kini punya teks yang **muncul TEPAT bersamaan dengan suaranya**.
+- **Dipilih manual per video** — video yang teksnya tidak diinginkan cukup biarkan mati (tanpa lencana TEKS di daftar). Tombol **TERAPKAN SETELAN KE SEMUA** ikut menyebarkan pilihan ini ke semua video.
+- **Tiga pilihan kecepatan membaca suara:**
+  | Pilihan | Cocok untuk |
+  |---|---|
+  | **SANGAT CEPAT** | Paling kilat, suara sangat jelas, akurasi dasar |
+  | **CEPAT** (disarankan) | Hasil cepat, rata-rata bagus, cocok untuk video jelas |
+  | **AKURAT** | Lebih teliti untuk audio berisik / banyak istilah, agak lama |
+- **Tiga gaya tampilan teks:** KLASIK (teks putih di bawah seperti film), TIKTOK (teks besar rata tengah dengan latar gelap — bawaan), dan KARAOKE (kata yang sedang diucapkan menyala emas satu per satu!).
+- **Video panjang tidak dua kali kerja** — film 2 jam dibaca suaranya **sekali saja** (~20–40 menit di belakang layar dengan mode CEPAT), lalu semua bagian otomatis menerima teksnya masing-masing sesuai rentang waktunya.
+- **Progres transparan** — saat aplikasi sedang membaca suara, status tampil jelas: *"Membaca suara (teks otomatis)..."* dengan persentase, lalu lanjut merender seperti biasa.
+- Video tanpa suara (musik saja / senyap) otomatis dilewati tanpa error. Aplikasi tetap berjalan offline penuh — mesin dan model suara sudah tertanam di dalam installer.
+
+## Cara Upgrade
+
+1. **Uninstall** KolosalCut lama (Settings → Apps → KolosalCut → Uninstall).
+2. Unduh & install **`KolosalCut-Setup-1.3.3.exe`** (di bawah).
+3. Jika SmartScreen muncul: **More info → Run anyway**.
+4. Buka aplikasi — pastikan header tertulis **v1.3.3**.
+
+## Isi Rilis
+
+| Berkas | Keterangan |
+|---|---|
+| `KolosalCut-Setup-1.3.3.exe` | Installer Windows (disarankan) |
+| `KolosalCut-Portable-1.3.3.exe` | Versi portabel tanpa instalasi |
+
+---
+
 # KolosalCut v1.3.2
 
 Perbaikan render: **judul video kini selalu tampil di cover** (tidak ada lagi cover yang hanya bertuliskan "PART 1"), teks judul panjang kini terbungkus rapi persis seperti pratinjau, dan durasi hasil kini **persis sesuai setelan** (tidak ada lagi 2 detik ekstra membeku di ujung tiap bagian). Ditambah: **render antrean kini default hanya 2 video serentak** agar PC tidak tersiksa saat mengantre puluhan video.

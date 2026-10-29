@@ -634,6 +634,15 @@ export default function Home() {
                             >
                               {meta.label}
                             </span>
+                            {/* v1.3.3: lencana teks otomatis aktif untuk video ini */}
+                            {it.settings.subtitle.enabled && (
+                              <span
+                                title="Teks otomatis (suara → teks) aktif"
+                                className="font-tech text-[9px] tracking-wider rounded border px-1.5 py-0.5 shrink-0 text-amber-200 border-amber-300/40 bg-amber-400/10"
+                              >
+                                TEKS
+                              </span>
+                            )}
                             {(it.status === "siap" ||
                               it.status === "gagal-unggah" ||
                               it.status === "mengunggah") && (

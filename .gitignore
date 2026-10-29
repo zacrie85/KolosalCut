@@ -55,6 +55,8 @@ server.log
 # KolosalCut desktop packaging
 release/
 resources/bin/
+# model whisper (diunduh CI & pengujian lokal, terlalu besar utk repo)
+resources/models/
 scratch/
 uploads/
 exports/

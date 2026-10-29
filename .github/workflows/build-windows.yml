@@ -43,6 +43,35 @@ jobs:
           Copy-Item $ffprobe.FullName resources/bin/ffprobe.exe
           Write-Host "FFmpeg siap dibundel."
 
+      - name: Unduh mesin & model Whisper — teks otomatis (v1.3.3)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path resources/models | Out-Null
+          $tag = "b5454"
+          Write-Host "Mengunduh whisper-cli (whisper.cpp $tag)..."
+          Invoke-WebRequest -Uri "https://github.com/ggml-org/whisper.cpp/releases/download/$tag/whisper-bin-x64.zip" -OutFile "$env:RUNNER_TEMP\whisper.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\whisper.zip" -DestinationPath "$env:RUNNER_TEMP\whisper" -Force
+          $cli = Get-ChildItem -Path "$env:RUNNER_TEMP\whisper" -Recurse -Filter "whisper-cli.exe" | Select-Object -First 1
+          if (-not $cli) { Write-Host "=== isi zip ==="; Get-ChildItem -Recurse "$env:RUNNER_TEMP\whisper" | Select-Object FullName; throw "whisper-cli.exe tidak ditemukan di zip" }
+          Copy-Item $cli.FullName resources/bin/whisper-cli.exe
+          # salin semua DLL pendamping (whisper.dll, SDL2.dll, dst.)
+          Get-ChildItem -Path "$env:RUNNER_TEMP\whisper" -Recurse -Filter "*.dll" | ForEach-Object { Copy-Item $_.FullName resources/bin/ -Force }
+          Write-Host "Mengunduh model suara Bahasa Indonesia (q5_1)..."
+          foreach ($m in @("tiny","base","small")) {
+            $f = "ggml-$m-q5_1.bin"
+            Invoke-WebRequest -Uri "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$f" -OutFile "resources/models/$f"
+          }
+          Write-Host "=== resources/bin ==="; Get-ChildItem resources/bin | Format-Table Name, Length
+          Write-Host "=== resources/models ==="; Get-ChildItem resources/models | Format-Table Name, Length
+
+      - name: Gerbang uji whisper-cli sebelum dipaketkan
+        shell: pwsh
+        run: |
+          $out = & resources/bin/whisper-cli.exe --help 2>&1 | Select-Object -First 3
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0) { throw "whisper-cli.exe gagal dijalankan (kode $LASTEXITCODE)" }
+          Write-Host "whisper-cli OK"
+
       - name: Build Next.js (standalone)
         run: npm run build
 

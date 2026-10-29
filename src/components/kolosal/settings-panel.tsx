@@ -15,6 +15,12 @@ import {
   QUALITY_INFO,
   QualityKey,
   TextElement,
+  SUB_MODES_INFO,
+  SUB_MODE_KEYS,
+  SUB_STYLES_INFO,
+  SUB_STYLE_KEYS,
+  SubMode,
+  SubStyle,
 } from "@/lib/video-config";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,6 +54,7 @@ import {
   RotateCcw,
   FolderOpen,
   FolderCheck,
+  Captions,
 } from "lucide-react";
 
 type SettingsTab = "video" | "teks" | "gaya";
@@ -923,6 +930,96 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
           Setiap video mendapat subfolder sendiri sesuai judulnya. Tombol pilih folder aktif di
           aplikasi Windows; di pratinjau browser hasil tetap tersimpan di folder bawaan.
         </p>
+      </Section>
+
+      {/* ===== TEKS OTOMATIS (v1.3.3) ===== */}
+      <Section num="10" icon={<Captions className="w-4 h-4" />} title="Teks Otomatis (Suara → Teks)">
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="subtitle-on" className="text-xs text-zinc-300">
+            Buat teks dari suara video ini
+          </Label>
+          <Switch
+            id="subtitle-on"
+            checked={s.subtitle.enabled}
+            disabled={disabled}
+            onCheckedChange={(v) =>
+              onChange({ subtitle: { ...s.subtitle, enabled: v } })
+            }
+          />
+        </div>
+        {s.subtitle.enabled ? (
+          <>
+            <p className="text-[11px] leading-snug text-emerald-200/80">
+              Setiap ucapan di video otomatis jadi teks yang menempel pas dengan suaranya
+              (Bahasa Indonesia — resmi &amp; slang, berjalan offline).
+            </p>
+            <div>
+              <p className="font-tech text-[9px] tracking-[0.18em] text-zinc-500 uppercase mb-1.5">
+                Kecepatan membaca suara
+              </p>
+              <div className="flex gap-1.5">
+                {SUB_MODE_KEYS.map((k) => (
+                  <Button
+                    key={k}
+                    size="sm"
+                    disabled={disabled}
+                    variant={s.subtitle.mode === k ? "default" : "outline"}
+                    className={`h-8 flex-1 text-[10px] px-1 ${
+                      s.subtitle.mode === k
+                        ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]"
+                        : "border-zinc-700 text-zinc-300"
+                    }`}
+                    onClick={() =>
+                      onChange({ subtitle: { ...s.subtitle, mode: k as SubMode } })
+                    }
+                  >
+                    {SUB_MODES_INFO[k].label.toUpperCase()}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-[11px] text-zinc-500 mt-1.5 leading-snug">
+                {SUB_MODES_INFO[s.subtitle.mode].desc}
+              </p>
+            </div>
+            <div>
+              <p className="font-tech text-[9px] tracking-[0.18em] text-zinc-500 uppercase mb-1.5">
+                Gaya teks di video
+              </p>
+              <div className="flex gap-1.5">
+                {SUB_STYLE_KEYS.map((k) => (
+                  <Button
+                    key={k}
+                    size="sm"
+                    disabled={disabled}
+                    variant={s.subtitle.style === k ? "default" : "outline"}
+                    className={`h-8 flex-1 text-[10px] px-1 ${
+                      s.subtitle.style === k
+                        ? "bg-amber-300 text-slate-950 hover:bg-amber-200 font-semibold shadow-[0_0_16px_rgba(252,211,77,0.3)]"
+                        : "border-zinc-700 text-zinc-300"
+                    }`}
+                    onClick={() =>
+                      onChange({ subtitle: { ...s.subtitle, style: k as SubStyle } })
+                    }
+                  >
+                    {SUB_STYLES_INFO[k].label.toUpperCase()}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-[11px] text-zinc-500 mt-1.5 leading-snug">
+                {SUB_STYLES_INFO[s.subtitle.style].desc}
+              </p>
+            </div>
+            <p className="text-[11px] text-zinc-600 leading-snug">
+              Video panjang cukup dibaca sekali — semua bagian otomatis dapat teksnya.
+              Video tanpa suara dilewati otomatis.
+            </p>
+          </>
+        ) : (
+          <p className="text-[11px] text-zinc-500 leading-snug">
+            Mati — video dirender tanpa teks otomatis. Aktifkan agar setiap ucapan langsung
+            tampil sebagai teks yang sinkron dengan suaranya.
+          </p>
+        )}
       </Section>
       </>
       )}

@@ -12,6 +12,9 @@ extraResources:
   # Binary FFmpeg/FFprobe Windows (diunduh oleh CI, tidak ikut repo)
   - from: resources/bin
     to: bin
+  # v1.3.3: model suara Whisper untuk teks otomatis (diunduh oleh CI)
+  - from: resources/models
+    to: models
   # Font sinematik untuk teks pada video
   - from: resources/fonts
     to: fonts

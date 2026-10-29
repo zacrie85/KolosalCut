@@ -17,6 +17,11 @@ import {
   QualityKey,
 } from "@/lib/video-config";
 import { Job, VideoInfo } from "@/lib/server/jobs";
+import {
+  transcribeVideo,
+  buildAssForPart,
+  Transcript,
+} from "@/lib/server/transcribe";
 
 // Direktori data (unggahan & hasil render). Pada versi desktop Windows, nilai ini
 // dialihkan lewat env KOLOSAL_DATA_DIR agar selalu berada di folder yang dapat ditulis.
@@ -228,7 +233,8 @@ async function encodePart(
   framePath: string | null,
   outPath: string,
   tmpDir: string,
-  onProgress: (frac: number) => void
+  onProgress: (frac: number) => void,
+  assPath: string | null = null
 ): Promise<void> {
   const s = job.settings;
   const coverOn = s.coverEnabled && !!framePath;
@@ -291,6 +297,11 @@ async function encodePart(
   const bars = barsFilter(s);
   const texts = textFilters(s, partNum, tmpDir, false, job.title);
   const textsC = coverOn ? textFilters(s, partNum, tmpDir, true, job.title) : "";
+  // v1.3.3: teks otomatis dari suara — filter subtitles (ASS) hanya pada
+  // cabang ISI (bukan cover), sehingga ucapan selalu pas dgn teksnya.
+  const subFilter = assPath
+    ? `,subtitles=filename='${escFilterPath(assPath)}':fontsdir='${escFilterPath(FONTS_DIR)}'`
+    : "";
 
   // ---- cabang video utama ----
   // posisi horizontal ambil gambar: 0 = kiri, 0.5 = tengah, 1 = kanan
@@ -325,9 +336,9 @@ async function encodePart(
     // tanpa shortest framesync memperpanjang output sampai overlay habis ->
     // frame terakhir video utama "membeku" 1 detik ekstra di tiap bagian.
     g.push(`[pv0][${ovMain}:v]overlay=0:0:shortest=1[pv1]`);
-    g.push(`[pv1]null${texts}[pv]`);
+    g.push(`[pv1]null${texts}${subFilter}[pv]`);
   } else {
-    g.push(`[pv0]null${texts}[pv]`);
+    g.push(`[pv0]null${texts}${subFilter}[pv]`);
   }
 
   let maps: string[];
@@ -459,6 +470,36 @@ export async function runJob(job: Job): Promise<void> {
     const word = labelWordFor(s);
     const q = s.quality;
 
+    // v1.3.3 — TEKS OTOMATIS (suara → teks, Whisper offline, Bahasa Indonesia):
+    // baca suara SEKALI di video asli, lalu tiap bagian mengambil teks sesuai
+    // rentang waktunya. Porsi progres tahap ini: 0..15%.
+    const sub = s.subtitle;
+    let transcript: Transcript | null = null;
+    if (sub.enabled && job.info.hasAudio) {
+      job.phase = "Membaca suara (teks otomatis)...";
+      try {
+        transcript = await transcribeVideo(
+          job.uploadPath,
+          sub.mode,
+          path.dirname(job.uploadPath),
+          job.info.duration,
+          (f) => {
+            job.progress = f * 0.15;
+          }
+        );
+      } catch (e) {
+        // gagal membaca suara = gagal job (pesan jelas), bukan senyap —
+        // pengguna sengaja mengaktifkan teks otomatis.
+        throw new Error(
+          `Teks otomatis gagal: ${(e as Error)?.message ?? e}`
+        );
+      }
+    }
+    // porsi progres render bagian: 15..100% bila transkripsi berjalan
+    const SUB_SPAN = transcript ? 0.15 : 0;
+    const progBase = SUB_SPAN;
+    const progSpan = 1 - SUB_SPAN;
+
     // tulis file teks persis sesuai pola yang dirujuk textFilters:
     // txt_{title|label|desc}_{p|c}{n}.txt (p = bagian utama, c = cover)
     // v1.3.2: isi berkas di-word-wrap seperti pratinjau (wrapText + maxCharsFor)
@@ -511,11 +552,33 @@ export async function runJob(job: Job): Promise<void> {
         }
       }
 
+      // v1.3.3: berkas .ass teks otomatis utk bagian ini (waktu digeser)
+      let assPath: string | null = null;
+      if (transcript && transcript.segs.length > 0) {
+        assPath = path.join(tmpDir, `sub_p${n}.ass`);
+        await buildAssForPart(
+          transcript,
+          seg.start,
+          seg.start + seg.dur,
+          sub.style,
+          assPath
+        );
+      }
+
       const outFile = `${sanitizeFile(job.title)}-${word}-${n}.mp4`;
       const outPath = path.join(outDir, outFile);
-      await encodePart(job, seg, n, framePath, outPath, tmpDir, (frac) => {
-        job.progress = (i + frac) / segs.length;
-      });
+      await encodePart(
+        job,
+        seg,
+        n,
+        framePath,
+        outPath,
+        tmpDir,
+        (frac) => {
+          job.progress = progBase + progSpan * ((i + frac) / segs.length);
+        },
+        assPath
+      );
 
       // thumbnail dari tengah cover (menampilkan tampilan akhir)
       const thumbName = `thumb_${n}.jpg`;
@@ -537,7 +600,7 @@ export async function runJob(job: Job): Promise<void> {
         size: st.size,
         duration: (s.coverEnabled ? s.coverDuration : 0) + seg.dur,
       });
-      job.progress = (i + 1) / segs.length;
+      job.progress = progBase + progSpan * ((i + 1) / segs.length);
       void q;
     }
 

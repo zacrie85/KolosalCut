@@ -220,6 +220,9 @@ function startServer(port) {
     FFMPEG_PATH: path.join(BIN_DIR, "ffmpeg.exe"),
     FFPROBE_PATH: path.join(BIN_DIR, "ffprobe.exe"),
     FFMPEG_FONT: path.join(FONT_DIR, "Carlito-Bold.ttf"),
+    // v1.3.3: mesin teks otomatis (Whisper) + model suara
+    WHISPER_PATH: path.join(BIN_DIR, "whisper-cli.exe"),
+    KOLOSAL_WHISPER_MODELS_DIR: path.join(process.resourcesPath, "models"),
   };
   serverProc = spawn(process.execPath, [SERVER_JS], {
     cwd: APP_DIR,
