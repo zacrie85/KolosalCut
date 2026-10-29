@@ -67,9 +67,19 @@ jobs:
       - name: Gerbang uji whisper-cli sebelum dipaketkan
         shell: pwsh
         run: |
-          $out = & resources/bin/whisper-cli.exe --help 2>&1 | Select-Object -First 3
-          Write-Host $out
-          if ($LASTEXITCODE -ne 0) { throw "whisper-cli.exe gagal dijalankan (kode $LASTEXITCODE)" }
+          # PENTING: jangan pipa langsung ke Select-Object -First — pipeline terpotong
+          # membuat proses dihentikan lebih awal dan $LASTEXITCODE kosong sehingga
+          # gerbang salah gagal (bug CI v1.3.3 pertama). Tangkap penuh -> cek kode ->
+          # baru tampilkan sebagian output.
+          $out = & resources/bin/whisper-cli.exe --help 2>&1
+          $code = $LASTEXITCODE
+          Write-Host ($out | Select-Object -First 3)
+          if ($code -ne 0) { throw "whisper-cli.exe gagal dijalankan (kode $code)" }
+          # sanity: pastikan ketiga model terunduh utuh (bukan HTML error / terpotong)
+          Get-ChildItem resources/models/*.bin | ForEach-Object {
+            if ($_.Length -lt 20MB) { throw "model suara rusak/kekecilan: $($_.Name) ($($_.Length) byte)" }
+            Write-Host ("model OK: {0} ({1} MB)" -f $_.Name, [math]::Round($_.Length/1MB))
+          }
           Write-Host "whisper-cli OK"
 
       - name: Build Next.js (standalone)
