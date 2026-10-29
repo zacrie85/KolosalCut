@@ -2,7 +2,7 @@
 set -e
 cd /home/z/my-project/resources
 echo "[1/3] unduh whisper-cli Linux (untuk tes lokal)..."
-curl -sL --retry 3 -o /tmp/whisper-ubuntu.tar.gz "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.5/whisper-bin-ubuntu-x64.tar.gz"
+curl -sL --retry 3 -o /tmp/whisper-ubuntu.tar.gz "https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-ubuntu-x64.tar.gz"
 tar -xzf /tmp/whisper-ubuntu.tar.gz -C /tmp/whisper-ubuntu-extract 2>/dev/null || (mkdir -p /tmp/whisper-ubuntu-extract && tar -xzf /tmp/whisper-ubuntu.tar.gz -C /tmp/whisper-ubuntu-extract)
 find /tmp/whisper-ubuntu-extract -type f | head -20
 CLI=$(find /tmp/whisper-ubuntu-extract -name "whisper-cli" -type f | head -1)
