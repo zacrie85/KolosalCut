@@ -1009,6 +1009,37 @@ export function SettingsPanel({ settings: s, onChange, hasVideo }: SettingsPanel
                 {SUB_STYLES_INFO[s.subtitle.style].desc}
               </p>
             </div>
+            {/* v1.3.4: slider posisi vertikal teks (naik turun) */}
+            <div>
+              <div className="flex items-center gap-3">
+                <Label className="text-xs text-zinc-400 shrink-0">Posisi Teks</Label>
+                <Slider
+                  value={[s.subtitle.posY]}
+                  min={0.05}
+                  max={0.95}
+                  step={0.01}
+                  disabled={disabled}
+                  onValueChange={(v) =>
+                    onChange({ subtitle: { ...s.subtitle, posY: v[0] } })
+                  }
+                  className="flex-1"
+                />
+                <span className="text-[11px] text-zinc-500 tabular-nums w-9">
+                  {Math.round(s.subtitle.posY * 100)}%
+                </span>
+              </div>
+              <div
+                className="flex justify-between font-tech text-[9px] tracking-[0.18em] text-zinc-600 px-1 mt-0.5"
+                aria-hidden
+              >
+                <span>▲ ATAS</span>
+                <span>TENGAH</span>
+                <span>BAWAH ▼</span>
+              </div>
+              <p className="text-[11px] text-zinc-500 mt-1 leading-snug">
+                Geser untuk menaikkan atau menurunkan posisi teks di video.
+              </p>
+            </div>
             <p className="text-[11px] text-zinc-600 leading-snug">
               Video panjang cukup dibaca sekali — semua bagian otomatis dapat teksnya.
               Video tanpa suara dilewati otomatis.

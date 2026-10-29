@@ -11,6 +11,13 @@ const BASE = process.env.BASE || "http://127.0.0.1:3000";
 const VIDEO = path.join(process.cwd(), "scripts/whisper-repro/video-uji.mp4");
 const MODE = process.env.SUB_MODE || "cepat";
 const STYLE = process.env.SUB_STYLE || "tiktok";
+const POS = Number.isFinite(parseFloat(process.env.SUB_POS))
+  ? clampPos(parseFloat(process.env.SUB_POS))
+  : 0.75;
+
+function clampPos(v) {
+  return Math.min(0.95, Math.max(0.05, v));
+}
 
 function fail(msg) {
   console.error("❌ GAGAL:", msg);
@@ -52,7 +59,7 @@ const settings = {
   quality: "fast",
   parallel: 1,
   outputDir: "",
-  subtitle: { enabled: true, mode: MODE, style: STYLE },
+  subtitle: { enabled: true, mode: MODE, style: STYLE, posY: POS },
 };
 const pr = await fetch(`${BASE}/api/process`, {
   method: "POST",

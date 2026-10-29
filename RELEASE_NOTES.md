@@ -1,3 +1,35 @@
+# KolosalCut v1.3.4
+
+Fitur baru pada **Teks Otomatis**: **slider POSISI TEKS** — naikkan atau turunkan posisi teks subtitle di video sesuka hatimu.
+
+## Baru: Slider Posisi Teks (▲ ATAS ↔ BAWAH ▼)
+
+- Sebelumnya teks otomatis selalu tampil di tengah layar dan tidak bisa dipindah.
+- Kini ada slider **"Posisi Teks"** di menu **10 Teks Otomatis** (muncul saat teks otomatis diaktifkan):
+  - Geser ke **▲ ATAS** → teks naik ke arah atas layar
+  - Geser ke **▼ BAWAH** → teks turun mendekati dasar layar
+  - Angka persen ditampilkan langsung (0–100%)
+- Berlaku untuk **ketiga gaya** (Klasik, TikTok, Karaoke) — posisi yang kamu pilih dipakai semua bagian video.
+- Posisi bawaan kini **75%** — zona subtitle khas reels, tidak lagi pas di tengah.
+- Setelan posisi ikut terbawa oleh **TERAPKAN SETELAN KE SEMUA**.
+- Posisi dibatasi 5–95% agar teks tidak pernah terpotong keluar layar.
+
+## Cara Upgrade
+
+1. **Uninstall** KolosalCut lama (Settings → Apps → KolosalCut → Uninstall).
+2. Unduh & install **`KolosalCut-Setup-1.3.4.exe`** (di bawah).
+3. Jika SmartScreen muncul: **More info → Run anyway**.
+4. Buka aplikasi — pastikan header tertulis **v1.3.4**.
+
+## Isi Rilis
+
+| Berkas | Keterangan |
+|---|---|
+| `KolosalCut-Setup-1.3.4.exe` | Installer Windows (disarankan) |
+| `KolosalCut-Portable-1.3.4.exe` | Versi portabel tanpa instalasi |
+
+---
+
 # KolosalCut v1.3.3
 
 Fitur baru besar: **TEKS OTOMATIS (SUARA → TEKS)** — setiap ucapan di video otomatis menjadi teks yang menempel pas dengan suaranya, seperti caption TikTok. Berjalan **100% offline** di PC-mu (tanpa internet), difokuskan untuk **Bahasa Indonesia (resmi & slang)**.

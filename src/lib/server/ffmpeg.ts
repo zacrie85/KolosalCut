@@ -561,6 +561,7 @@ export async function runJob(job: Job): Promise<void> {
           seg.start,
           seg.start + seg.dur,
           sub.style,
+          sub.posY,
           assPath
         );
       }

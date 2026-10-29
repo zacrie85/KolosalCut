@@ -328,6 +328,7 @@ export function buildAssForPart(
   segStart: number,
   segEnd: number,
   style: SubStyle,
+  posY: number,
   outPath: string
 ): Promise<void> {
   // hanya ucapan yang jatuh di dalam rentang bagian ini (toleransi 1ms)
@@ -377,9 +378,15 @@ export function buildAssForPart(
     }
   }
 
+  // v1.3.4: posisi vertikal teks dikendalikan pengguna (posY 0..1, 1 = paling bawah).
+  // Semua gaya kini ber-anchour bawah-tengah (Alignment 2) -> MarginV = jarak dari
+  // bawah; blok banyak baris tumbuh ke atas. Batasi agar teks tidak keluar layar.
+  const safePosY = Math.min(0.95, Math.max(0.05, Number.isFinite(posY) ? posY : 0.75));
+  const marginV = Math.max(40, Math.min(1800, Math.round((1 - safePosY) * 1920)));
+
   const header = [
     "[Script Info]",
-    "; KolosalCut v1.3.3 — teks otomatis dari suara (Whisper)",
+    "; KolosalCut v1.3.4 — teks otomatis dari suara (Whisper)",
     "ScriptType: v4.00+",
     "PlayResX: 1080",
     "PlayResY: 1920",
@@ -388,12 +395,12 @@ export function buildAssForPart(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    // klasik: bawah-tengah, putih, garis luar hitam
-    "Style: Utama,Archivo Black,54,&H00FFFFFF,&H000000FF,&H00101010,&H96000000,0,0,0,0,100,100,0,0,1,3,1,2,70,70,130,1",
+    // klasik: putih, garis luar hitam — posisi ikut slider pengguna (v1.3.4)
+    `Style: Utama,Archivo Black,54,&H00FFFFFF,&H000000FF,&H00101010,&H96000000,0,0,0,0,100,100,0,0,1,3,1,2,70,70,${marginV},1`,
     // (gaya tiktok/karaoke memakai gaya berbeda via baris style tambahan)
-    "Style: TikTok,Archivo Black,66,&H00FFFFFF,&H000000FF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,10,2,5,60,60,0,1",
+    `Style: TikTok,Archivo Black,66,&H00FFFFFF,&H000000FF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,10,2,2,60,60,${marginV},1`,
     // karaoke: Primary = emas (sudah terucap), Secondary = putih (belum)
-    "Style: Karaok,Archivo Black,66,&H0000D7FF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,10,2,5,60,60,0,1",
+    `Style: Karaok,Archivo Black,66,&H0000D7FF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,10,2,2,60,60,${marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",

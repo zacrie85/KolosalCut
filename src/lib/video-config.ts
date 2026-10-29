@@ -25,6 +25,8 @@ export interface SubtitleSettings {
   mode: SubMode;
   /** gaya tampilan teks pada video */
   style: SubStyle;
+  /** posisi vertikal teks: 0 = paling atas, 1 = paling bawah (v1.3.4) */
+  posY: number;
 }
 
 export type SubStyle = "klasik" | "tiktok" | "karaoke";
@@ -306,7 +308,8 @@ export const DEFAULT_SETTINGS: Settings = {
   parallel: 2,
   outputDir: "",
   // v1.3.3: teks otomatis MATI secara bawaan — pengguna memilih per video
-  subtitle: { enabled: false, mode: "cepat", style: "tiktok" },
+  // v1.3.4: posY 0.75 = zona subtitle khas reels (sedikit di bawah tengah)
+  subtitle: { enabled: false, mode: "cepat", style: "tiktok", posY: 0.75 },
 };
 
 /** teks label untuk bagian ke-n, mis. "PART 1" */
@@ -464,6 +467,10 @@ export function sanitizeSettings(raw: unknown): Settings {
       style: SUB_STYLE_KEYS.includes(r.subtitle?.style as SubStyle)
         ? (r.subtitle!.style as SubStyle)
         : d.subtitle.style,
+      // v1.3.4: posisi vertikal teks (0.05–0.95) — aman dari tepi layar
+      posY: Number.isFinite(Number(r.subtitle?.posY))
+        ? clamp(Number(r.subtitle!.posY), 0.05, 0.95)
+        : d.subtitle.posY,
     },
   };
 }
