@@ -67,6 +67,17 @@ export function ResultPanel({ job }: ResultPanelProps) {
               ? "RENDER GAGAL"
               : "SEDANG MERENDER"}
         </h3>
+        {/* v1.3.5: lencana mesin yang dipakai */}
+        {job.engineUsed === "kilat" && (
+          <span className="font-tech text-[9px] tracking-wider rounded border border-emerald-300/40 bg-emerald-400/10 px-1.5 py-0.5 text-emerald-200">
+            ⚡ KILAT
+          </span>
+        )}
+        {job.engineUsed === "penuh" && (
+          <span className="font-tech text-[9px] tracking-wider rounded border border-cyan-300/30 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-200">
+            RENDER PENUH
+          </span>
+        )}
       </div>
 
       {processing && (

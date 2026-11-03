@@ -1,19 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-
-/** subscribe noop stabil untuk useSyncExternalStore (nilai API desktop tidak pernah berubah) */
-const subscribeNoop = () => () => {};
+import { useEffect, useRef, useState } from "react";
 import {
   Settings,
   LabelFormat,
   FRAME_STYLES,
   FONT_OPTIONS,
-  PARALLEL_OPTIONS,
-  ParallelKey,
   FontKey,
-  QUALITY_INFO,
-  QualityKey,
   TextElement,
   SUB_MODES_INFO,
   SUB_MODE_KEYS,
@@ -71,8 +64,6 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
-  FolderOpen,
-  FolderCheck,
   Captions,
   Expand,
   Crosshair,
@@ -590,23 +581,7 @@ export function SettingsPanel({
     reader.readAsDataURL(f);
   };
 
-  // deteksi API desktop (Electron) untuk dialog pilih folder
-  const isDesktop = useSyncExternalStore(
-    subscribeNoop,
-    () => Boolean(window.kolosalAPI?.selectOutputDir),
-    () => false
-  );
-
-  const pickFolder = async () => {
-    const api = window.kolosalAPI;
-    if (!api?.selectOutputDir) return;
-    try {
-      const dir = await api.selectOutputDir();
-      if (dir) onChange({ outputDir: dir });
-    } catch {
-      /* pengguna membatalkan / dialog gagal — abaikan */
-    }
-  };
+  // v1.3.5: dialog folder & setelan ekspor kini ada di panel EKSPORT & SPLIT ala NOVACUT
 
   /** pilihan font dengan contoh tulisan memakai font aslinya */
   const fontSelect = (
@@ -675,85 +650,11 @@ export function SettingsPanel({
       <div className="flex-1 min-h-0 overflow-y-auto kolosal-scroll lg:pr-1 flex flex-col gap-3 pb-1">
       {tab === "video" && (
       <>
-      {/* ===== PEMOTONGAN ===== */}
-      <Section num="01" icon={<Scissors className="w-4 h-4" />} title="Pemotongan Video">
-        <div className="flex gap-1.5">
-          <Button
-            size="sm"
-            disabled={disabled}
-            variant={s.splitMode === "duration" ? "default" : "outline"}
-            className={`h-8 flex-1 text-xs ${s.splitMode === "duration" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
-            onClick={() => onChange({ splitMode: "duration" })}
-          >
-            Per Durasi (detik)
-          </Button>
-          <Button
-            size="sm"
-            disabled={disabled}
-            variant={s.splitMode === "parts" ? "default" : "outline"}
-            className={`h-8 flex-1 text-xs ${s.splitMode === "parts" ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
-            onClick={() => onChange({ splitMode: "parts" })}
-          >
-            Per Jumlah Bagian
-          </Button>
-        </div>
-        {s.splitMode === "duration" ? (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="split-sec" className="text-xs text-zinc-400">
-              Durasi setiap bagian (detik)
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                id="split-sec"
-                type="number"
-                min={3}
-                max={3600}
-                value={s.splitSeconds}
-                disabled={disabled}
-                onChange={(e) =>
-                  onChange({ splitSeconds: Math.max(3, Math.min(3600, Number(e.target.value) || 3)) })
-                }
-                className="h-9 bg-zinc-950 border-zinc-700"
-              />
-              <div className="flex gap-1">
-                {[30, 60, 90].map((v) => (
-                  <Button
-                    key={v}
-                    size="sm"
-                    variant="outline"
-                    disabled={disabled}
-                    className="h-9 px-2 text-xs border-zinc-700 text-zinc-300"
-                    onClick={() => onChange({ splitSeconds: v })}
-                  >
-                    {v}s
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="split-n" className="text-xs text-zinc-400">
-              Jumlah bagian yang diinginkan
-            </Label>
-            <Input
-              id="split-n"
-              type="number"
-              min={1}
-              max={50}
-              value={s.splitParts}
-              disabled={disabled}
-              onChange={(e) =>
-                onChange({ splitParts: Math.max(1, Math.min(50, Math.round(Number(e.target.value) || 1))) })
-              }
-              className="h-9 bg-zinc-950 border-zinc-700"
-            />
-          </div>
-        )}
-      </Section>
+      {/* v1.3.5: menu PEMOTONGAN, PARALEL, KUALITAS & FOLDER pindah ke panel
+          EKSPORT & SPLIT ala NOVACUT di bawah panel ini */}
 
       {/* ===== RASIO & ZOOM — ZOOM & GESER ala NOVACUT (v1.3.5) ===== */}
-      <Section num="02" icon={<Proportions className="w-4 h-4" />} title="Rasio & Zoom">
+      <Section num="01" icon={<Proportions className="w-4 h-4" />} title="Rasio & Zoom">
         <div className="flex gap-1.5">
           <Button
             size="sm"
@@ -831,106 +732,8 @@ export function SettingsPanel({
         </div>
       </Section>
 
-      {/* ===== RENDER PARALEL ===== */}
-      <Section num="03" icon={<Layers className="w-4 h-4" />} title="Proses Paralel">
-        <div className="flex gap-1.5">
-          {PARALLEL_OPTIONS.map((n) => (
-            <Button
-              key={n}
-              size="sm"
-              disabled={disabled}
-              variant={s.parallel === n ? "default" : "outline"}
-              className={`h-8 flex-1 text-xs ${
-                s.parallel === n
-                  ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]"
-                  : "border-zinc-700 text-zinc-300"
-              }`}
-              onClick={() => onChange({ parallel: n as ParallelKey })}
-            >
-              {n}×
-            </Button>
-          ))}
-        </div>
-        <p className="text-[11px] text-zinc-500 leading-snug">
-          {s.parallel === 1
-            ? "Satu video dirender pada satu waktu — paling ringan untuk PC lama."
-            : s.parallel === 2
-              ? "Hanya 2 video dirender serentak — begitu satu selesai, antrean berikutnya langsung jalan. Ringan & aman untuk PC."
-              : `${s.parallel} video dirender serentak — makin besar makin berat di PC. Urutan tetap dari video pertama.`}
-        </p>
-      </Section>
-
-      {/* ===== KUALITAS ===== */}
-      <Section num="04" icon={<Gauge className="w-4 h-4" />} title="Kualitas Render">
-        <div className="flex gap-1.5">
-          {(Object.keys(QUALITY_INFO) as QualityKey[]).map((k) => (
-            <Button
-              key={k}
-              size="sm"
-              disabled={disabled}
-              variant={s.quality === k ? "default" : "outline"}
-              className={`h-8 flex-1 text-xs ${s.quality === k ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold shadow-[0_0_16px_rgba(34,211,238,0.35)]" : "border-zinc-700 text-zinc-300"}`}
-              onClick={() => onChange({ quality: k })}
-            >
-              {QUALITY_INFO[k].label}
-            </Button>
-          ))}
-        </div>
-        <p className="text-[11px] text-zinc-500">{QUALITY_INFO[s.quality].desc}</p>
-      </Section>
-
-      {/* ===== FOLDER HASIL RENDER (v1.2.0) ===== */}
-      <Section num="05" icon={<FolderOpen className="w-4 h-4" />} title="Folder Hasil Render">
-        <div className="flex gap-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            className={`h-8 flex-1 text-xs font-tech tracking-wider ${
-              isDesktop
-                ? "border-cyan-300/40 text-cyan-200 hover:bg-cyan-400/10 hover:border-cyan-300/60"
-                : "border-zinc-700 text-zinc-500"
-            }`}
-            onClick={pickFolder}
-          >
-            <FolderOpen className="w-4 h-4 mr-1.5" aria-hidden />
-            PILIH FOLDER HASIL…
-          </Button>
-          {s.outputDir && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 border-zinc-700 text-zinc-300 hover:text-red-300 hover:border-red-400/50 text-xs"
-              onClick={() => onChange({ outputDir: "" })}
-            >
-              <RotateCcw className="w-3.5 h-3.5" aria-hidden />
-              RESET
-            </Button>
-          )}
-        </div>
-        <p className="text-[11px] leading-snug break-all">
-          {s.outputDir ? (
-            <>
-              <FolderCheck
-                className="inline w-3.5 h-3.5 text-emerald-300 mr-1 -mt-0.5"
-                aria-hidden
-              />
-              <span className="text-emerald-200">Hasil disimpan ke:</span>{" "}
-              <span className="text-zinc-300">{s.outputDir}</span>
-            </>
-          ) : (
-            <span className="text-zinc-500">
-              Belum dipilih — hasil disimpan ke folder data bawaan aplikasi.
-            </span>
-          )}
-        </p>
-        <p className="text-[11px] text-zinc-600 leading-snug">
-          Setiap video mendapat subfolder sendiri sesuai judulnya. Tombol pilih folder aktif di
-          aplikasi Windows; di pratinjau browser hasil tetap tersimpan di folder bawaan.
-        </p>
-      </Section>
-
       {/* ===== TEKS OTOMATIS (v1.3.3) ===== */}
-      <Section num="06" icon={<Captions className="w-4 h-4" />} title="Teks Otomatis (Suara → Teks)">
+      <Section num="02" icon={<Captions className="w-4 h-4" />} title="Teks Otomatis (Suara → Teks)">
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor="subtitle-on" className="text-xs text-zinc-300">
             Buat teks dari suara video ini

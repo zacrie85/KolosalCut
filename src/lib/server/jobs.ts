@@ -5,6 +5,8 @@ export interface VideoInfo {
   width: number;
   height: number;
   hasAudio: boolean;
+  /** v1.3.5: nama codec video asli (h264/hevc/...) — syarat MESIN KILAT */
+  codec?: string;
 }
 
 export interface PartInfo {
@@ -23,7 +25,7 @@ export interface Job {
   title: string;
   settings: Settings;
   info: VideoInfo;
-  status: "queued" | "processing" | "done" | "error";
+  status: "queued" | "processing" | "done" | "error" | "canceled";
   phase: string;
   progress: number;
   total: number;
@@ -36,6 +38,10 @@ export interface Job {
   coverOverlay?: string | null;
   /** v1.3.5: PNG teks PART per bagian (dataURL, urut bagian 1..N) */
   coverParts?: string[];
+  /** v1.3.5: permintaan batal dari pengguna — dicek antar bagian & membunuh ffmpeg */
+  cancelRequested?: boolean;
+  /** v1.3.5: mesin yang benar-benar dipakai ("kilat" / "penuh") — untuk ditampilkan */
+  engineUsed?: "kilat" | "penuh";
 }
 
 export interface JobPublic {
@@ -50,6 +56,8 @@ export interface JobPublic {
   createdAt: number;
   /** folder akhir tempat file MP4 hasil disimpan (null = folder bawaan) */
   outDir?: string | null;
+  /** v1.3.5: mesin yang benar-benar dipakai — ditampilkan di panel hasil */
+  engineUsed?: "kilat" | "penuh";
 }
 
 export function jobToPublic(j: Job): JobPublic {
@@ -64,6 +72,7 @@ export function jobToPublic(j: Job): JobPublic {
     title: j.title,
     createdAt: j.createdAt,
     outDir: j.outDir ?? null,
+    engineUsed: j.engineUsed,
   };
 }
 

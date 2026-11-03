@@ -6,6 +6,7 @@ import { ImportZone, MAX_VIDEOS, MAX_SIZE } from "@/components/kolosal/import-zo
 import { uploadVideo, fmtSize, type UploadResult } from "@/lib/upload-client";
 import { PreviewCanvas } from "@/components/kolosal/preview-canvas";
 import { SettingsPanel } from "@/components/kolosal/settings-panel";
+import { ExportPanel } from "@/components/kolosal/export-panel";
 import { ResultPanel } from "@/components/kolosal/result-panel";
 import { Timeline } from "@/components/kolosal/timeline";
 import {
@@ -23,8 +24,6 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   Clapperboard,
-  CircleAlert,
-  Zap,
   UploadCloud,
   X,
   Loader2,
@@ -44,7 +43,8 @@ type ItemStatus =
   | "antre"
   | "proses"
   | "selesai"
-  | "gagal";
+  | "gagal"
+  | "batal";
 
 interface QueueItem {
   uid: string;
@@ -82,6 +82,7 @@ const STATUS_META: Record<ItemStatus, { label: string; cls: string }> = {
   proses: { label: "MERENDER", cls: "text-cyan-200 border-cyan-300/50 bg-cyan-400/15" },
   selesai: { label: "SELESAI", cls: "text-emerald-200 border-emerald-400/40 bg-emerald-500/10" },
   gagal: { label: "GAGAL", cls: "text-red-300 border-red-400/50 bg-red-500/15" },
+  batal: { label: "DIBATALKAN", cls: "text-zinc-300 border-zinc-500/50 bg-zinc-600/20" },
 };
 
 export default function Home() {
@@ -284,7 +285,9 @@ export default function Home() {
   );
 
   const clearFinished = useCallback(() => {
-    const done = itemsRef.current.filter((i) => i.status === "selesai" || i.status === "gagal");
+    const done = itemsRef.current.filter(
+      (i) => i.status === "selesai" || i.status === "gagal" || i.status === "batal"
+    );
     done.forEach((i) => URL.revokeObjectURL(i.objectUrl));
     const ids = new Set(done.map((i) => i.uid));
     setItems((prev) => prev.filter((i) => !ids.has(i.uid)));
@@ -295,7 +298,13 @@ export default function Home() {
 
   // ==================== POLLING STATUS BATCH ====================
   const activeIds = items
-    .filter((i) => i.jobId && i.status !== "selesai" && i.status !== "gagal")
+    .filter(
+      (i) =>
+        i.jobId &&
+        i.status !== "selesai" &&
+        i.status !== "gagal" &&
+        i.status !== "batal"
+    )
     .map((i) => i.jobId!);
 
   useEffect(() => {
@@ -317,9 +326,11 @@ export default function Home() {
                 ? "selesai"
                 : j.status === "error"
                   ? "gagal"
-                  : j.status === "processing"
-                    ? "proses"
-                    : "antre";
+                  : j.status === "canceled"
+                    ? "batal"
+                    : j.status === "processing"
+                      ? "proses"
+                      : "antre";
             if (j.status === "error" && it.status !== "gagal") {
               toast({
                 title: `Render gagal: ${it.name}`,
@@ -463,12 +474,40 @@ export default function Home() {
     }
   }, [starting, toast]);
 
+  // ==================== PEMBATALAN (v1.3.5, ala NOVACUT) ====================
+  const cancelJobById = useCallback(
+    (jobId: string) => {
+      void fetch(`/api/job?id=${encodeURIComponent(jobId)}`, { method: "DELETE" })
+        .then(() => {
+          toast({ title: "Render dibatalkan", description: "Video ini dihentikan — bagian yang sudah selesai tetap tersimpan." });
+        })
+        .catch(() => {
+          /* antrean akan tetap dibersihkan oleh status polling */
+        });
+    },
+    [toast]
+  );
+
+  const cancelAllJobs = useCallback(() => {
+    const running = itemsRef.current.filter(
+      (i) => i.jobId && (i.status === "antre" || i.status === "proses")
+    );
+    running.forEach((i) => {
+      void fetch(`/api/job?id=${encodeURIComponent(i.jobId!)}`, { method: "DELETE" }).catch(() => {});
+    });
+    if (running.length > 0) {
+      toast({
+        title: "Semua render dibatalkan",
+        description: `${running.length} video dihentikan — bagian yang sudah selesai tetap tersimpan.`,
+      });
+    }
+  }, [toast]);
+
   // ==================== PRATINJAU ====================
   const segs = useMemo(
     () => (selected?.info ? computeSegments(selected.info.duration, settings) : []),
     [selected, settings]
   );
-  const estParts = segs.length;
 
   // pemberitahuan saat mode durasi melebihi 50 bagian: seluruh video dibagi rata
   const splitNotice = useMemo(() => {
@@ -494,7 +533,6 @@ export default function Home() {
   );
 
   const frameName = getFrameStyle(settings.frame).name;
-  const renderBusy = busyCount > 0;
 
   return (
     <div className="relative min-h-screen flex flex-col bg-background overflow-x-clip">
@@ -727,59 +765,42 @@ export default function Home() {
               />
             </div>
 
-            {/* --- CTA --- */}
+            {/* --- MENU EKSPORT & SPLIT ala NOVACUT (v1.3.5) --- */}
+            <ExportPanel
+              settings={settings}
+              onChange={onSettingsChange}
+              items={items}
+              starting={starting}
+              onStart={() => void startProcessAll()}
+              onCancelJob={cancelJobById}
+              onCancelAll={cancelAllJobs}
+            />
+
+            {/* --- terapkan setelan ke semua --- */}
             <div className="glass rounded-2xl p-3 flex flex-col gap-2 shrink-0">
-              <div className="flex gap-2">
-                <Button
-                  onClick={applyToAll}
-                  disabled={items.length === 0}
-                  variant="outline"
-                  className="flex-1 h-11 border-cyan-300/40 text-cyan-200 hover:bg-cyan-400/10 hover:border-cyan-300/70 font-tech tracking-wider text-xs disabled:opacity-40"
-                >
-                  <Layers className="w-4 h-4 mr-1.5" aria-hidden />
-                  TERAPKAN SETELAN KE SEMUA
-                </Button>
-                <Button
-                  onClick={startProcessAll}
-                  disabled={readyCount === 0 || starting}
-                  className="flex-1 h-11 font-display text-sm font-bold tracking-[0.06em] bg-gradient-to-r from-cyan-500 via-cyan-400 to-indigo-400 text-slate-950 shadow-[0_0_26px_rgba(34,211,238,0.45)] hover:shadow-[0_0_40px_rgba(34,211,238,0.65)] hover:from-cyan-400 hover:to-indigo-300 border-0"
-                >
-                  <Zap className="w-4 h-4 mr-1.5" aria-hidden />
-                  {starting
-                    ? "MENGIRIM..."
-                    : renderBusy
-                      ? `PROSES ${readyCount} VIDEO LAGI`
-                      : `PROSES SEMUA${readyCount ? ` (${readyCount})` : ""}`}
-                </Button>
-              </div>
-              <p className="font-tech text-[10px] tracking-wider text-zinc-500 text-center leading-relaxed">
-                {settings.parallel}× PARALEL • TIAP BAGIAN JADI MP4 1080×1920 • COVER • JUDUL •
-                LABEL • DESKRIPSI
-              </p>
-              {estParts >= 20 && selected && (
-                <p className="text-[11px] text-amber-300/90 flex gap-1.5 items-start leading-snug">
-                  <CircleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden />
-                  Video terpilih menghasilkan {estParts} bagian — render cukup lama.
-                </p>
-              )}
+              <Button
+                onClick={applyToAll}
+                disabled={items.length === 0}
+                variant="outline"
+                className="w-full h-10 border-cyan-300/40 text-cyan-200 hover:bg-cyan-400/10 hover:border-cyan-300/70 font-tech tracking-wider text-xs disabled:opacity-40"
+              >
+                <Layers className="w-4 h-4 mr-1.5" aria-hidden />
+                TERAPKAN SETELAN KE SEMUA
+              </Button>
             </div>
 
-            {/* --- hasil render per video --- */}
-            {items.some((i) => i.job) && (
-              <div className="flex flex-col gap-3 shrink-0">
-                {items
-                  .filter((i) => i.job)
-                  .map((i) => (
-                    <div key={i.uid} className="flex flex-col gap-1">
-                      <p className="font-tech text-[10px] tracking-[0.16em] text-cyan-100/60 px-1 flex items-center gap-1.5">
-                        <UploadCloud className="w-3 h-3" aria-hidden />
-                        {i.name}
-                      </p>
-                      <ResultPanel job={i.job ?? null} />
-                    </div>
-                  ))}
-              </div>
-            )}
+            {/* --- hasil render per video (selesai / gagal saja; progres ada di panel EKSPORT) --- */}
+            {items
+              .filter((i) => i.job && (i.job.status === "done" || i.job.status === "error"))
+              .map((i) => (
+                <div key={i.uid} className="flex flex-col gap-1 shrink-0">
+                  <p className="font-tech text-[10px] tracking-[0.16em] text-cyan-100/60 px-1 flex items-center gap-1.5">
+                    <UploadCloud className="w-3 h-3" aria-hidden />
+                    {i.name}
+                  </p>
+                  <ResultPanel job={i.job ?? null} />
+                </div>
+              ))}
           </aside>
         </div>
       </main>

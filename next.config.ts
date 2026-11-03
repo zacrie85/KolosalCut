@@ -12,6 +12,12 @@ try {
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // v1.3.5: kunci akar proyek — tanpa ini Next 16 mendeteksi bun.lock di folder
+  // induk dan menyarangkan output standalone ke .next/standalone/KolosalCut/,
+  // sehingga post-build.mjs & electron/main.js tidak menemukan server.js.
+  turbopack: {
+    root: __dirname,
+  },
   env: {
     NEXT_PUBLIC_APP_VERSION: APP_VERSION,
   },

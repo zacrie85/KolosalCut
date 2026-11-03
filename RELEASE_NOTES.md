@@ -1,6 +1,6 @@
 # KolosalCut v1.3.5
 
-Rilis terbesar KolosalCut! Panel pengaturan kini punya **5 MENU UTAMA**: **VIDEO, TEKS, GAYA, EFEK, COVER** — membawa **seluruh gaya COVER** dan **seluruh EFEK** ala NOVACUT Studio, plus **ZOOM & GESER bebas 4 arah**.
+Rilis terbesar KolosalCut! Panel pengaturan kini punya **5 MENU UTAMA**: **VIDEO, TEKS, GAYA, EFEK, COVER** — membawa **seluruh gaya COVER**, **seluruh EFEK**, **ZOOM & GESER bebas 4 arah**, dan **menu EKSPORT & SPLIT baru** ala NOVACUT Studio — jauh lebih cepat, tidak hang, dan bisa dibatalkan.
 
 ## 1. Menu COVER Baru — Cover Studio ala NOVACUT (100 Template!)
 
@@ -36,6 +36,18 @@ Menu cover lama digantikan penuh dengan **Cover Studio**:
 - **Pad panah 4 arah** untuk menggeser area gambar: kiri–kanan **dan** atas–bawah, dengan pembacaan **X/Y %** langsung.
 - Tombol **ISI FRAME** — menghitung zoom otomatis sampai bar hitam hilang (mode 9:16 Biasa).
 - Tombol **RESET** — kembali ke tengah & zoom 1×.
+
+## 4. Menu EKSPORT & SPLIT Baru — ala NOVACUT (Kilat ⚡ · Anti-Hang · Bisa Dibatalkan)
+
+Seluruh menu ekspor & split lama digantikan satu panel ala NOVACUT Studio, mengurus segalanya dari pembagian sampai hasil:
+
+- **EKSPORT SAJA / EKSPORT & SPLIT** — pilih tiap video jadi 1 file utuh, atau pecah otomatis jadi banyak video (*Berapa bagian* / *Durasi per video*) lengkap dengan estimasi **`01:10 → ±3 file hasil`**.
+- **MESIN KILAT ⚡** — video polos (tanpa cover/efek/teks) dipotong **tanpa render ulang**: 3 bagian dari video 70 detik selesai dalam ±1 detik (uji internal: 1 dtk vs 65 dtk render penuh — **puluhan kali lebih cepat**). Pilihan mesin: *Otomatis* (disarankan), *Kilat ⚡*, atau *Render Penuh*; bila ada gaya aktif, mesin otomatis beralih ke render penuh agar gaya tidak hilang (ada pemberitahuannya).
+- **ANTI-HANG** — mesin render kini punya penjaga: ffmpeg yang macet (tidak ada progres 90 detik) dihentikan otomatis dengan pesan yang jelas, bukan menggantung selamanya. Peluncuran video paralel diberi jeda singkat supaya RAM tidak tiba-tiba memuncak.
+- **BATALKAN** — tombol ❌ per video & **BATALKAN SEMUA**: render berhenti seketika (proses ffmpeg dibunuh) dan bagian yang sudah selesai tetap tersimpan.
+- **Estimasi waktu tersisa** di bar progres keseluruhan, plus progres per video ala batch NOVACUT.
+- Kualitas render, proses paralel (1–7×), dan folder hasil kini ikut di menu ini.
+- Hasil render penuh tetap identik: cover, frame neon, efek, teks, teks otomatis — semua gaya dijamin ikut (bagian mesin Kilat hanya dipakai saat memang tidak ada gaya).
 
 ## Cara Upgrade
 

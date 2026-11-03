@@ -8,11 +8,39 @@ import {
   getCoverTemplate,
 } from "@/lib/novacut-fx";
 
-export type SplitMode = "duration" | "parts";
+// v1.3.5: "off" = EKSPORT SAJA (ala NOVACUT) — tiap video jadi 1 file utuh
+export type SplitMode = "off" | "duration" | "parts";
 export type LabelFormat = "part" | "bagian" | "eps" | "episode" | "custom";
 export type RatioMode = "full" | "fit";
 export type QualityKey = "fast" | "balanced" | "high";
 export type BarSize = "kecil" | "sedang" | "besar";
+
+// ============================================================
+// v1.3.5 — MESIN RENDER ala NOVACUT (menu EKSPORT & SPLIT)
+// ============================================================
+/**
+ * auto  : otomatis — MESIN KILAT bila video "split polos" (tanpa cover/efek/
+ *         teks/gaya apa pun), selain itu MESIN PENUH. Disarankan.
+ * kilat : paksa MESIN KILAT (potong tanpa render ulang, hitungan detik).
+ *         Bila setelan butuh render (ada cover/efek/teks), otomatis jatuh
+ *         ke MESIN PENUH dengan pemberitahuan di fase render.
+ * penuh : selalu render ulang penuh (semua gaya & efek dijamin ikut).
+ */
+export type EngineKey = "auto" | "kilat" | "penuh";
+export const ENGINE_INFO: Record<EngineKey, { label: string; desc: string }> = {
+  auto: {
+    label: "Otomatis",
+    desc: "Kilat bila tanpa efek/cover/teks — penuh bila ada gaya. Paling cerdas.",
+  },
+  kilat: {
+    label: "Kilat ⚡",
+    desc: "Potong tanpa render ulang — secepat menyalin file (±detik per bagian). Potongan mengikuti keyframe video.",
+  },
+  penuh: {
+    label: "Render Penuh",
+    desc: "Render ulang semua bagian — semua cover, efek, teks & gaya dijamin ikut. Paling lambat.",
+  },
+};
 
 /** jumlah video yang dirender serentak */
 export type ParallelKey = 1 | 2 | 3 | 5 | 7;
@@ -244,6 +272,8 @@ export interface Settings {
   splitMode: SplitMode;
   splitSeconds: number;
   splitParts: number;
+  /** v1.3.5: mesin render ala NOVACUT — auto / kilat / penuh */
+  engine: EngineKey;
   coverEnabled: boolean;
   coverSame: boolean;
   coverDuration: number;
@@ -309,6 +339,8 @@ export const DEFAULT_SETTINGS: Settings = {
   splitMode: "duration",
   splitSeconds: 60,
   splitParts: 3,
+  // v1.3.5: mesin otomatis — split polos pakai KILAT (detik), ada gaya pakai PENUH
+  engine: "auto",
   coverEnabled: true,
   coverSame: false,
   coverDuration: 2,
@@ -490,9 +522,15 @@ export function sanitizeSettings(raw: unknown): Settings {
     : d.label.format;
   label.prefix = typeof r.label?.prefix === "string" ? r.label!.prefix.slice(0, 80) : d.label.prefix;
   return {
-    splitMode: r.splitMode === "parts" ? "parts" : "duration",
+    // v1.3.5: "off" = EKSPORT SAJA (1 file utuh tanpa dipecah)
+    splitMode:
+      r.splitMode === "off" || r.splitMode === "parts" ? (r.splitMode as SplitMode) : "duration",
     splitSeconds: clamp(Number(r.splitSeconds) || d.splitSeconds, 3, 3600),
     splitParts: clamp(Math.round(Number(r.splitParts) || d.splitParts), 1, 50),
+    // v1.3.5: mesin render ala NOVACUT
+    engine: (["auto", "kilat", "penuh"] as EngineKey[]).includes(r.engine as EngineKey)
+      ? (r.engine as EngineKey)
+      : d.engine,
     coverEnabled: typeof r.coverEnabled === "boolean" ? r.coverEnabled : d.coverEnabled,
     coverSame: typeof r.coverSame === "boolean" ? r.coverSame : d.coverSame,
     coverDuration: clamp(Number(r.coverDuration) || d.coverDuration, 1, 5),
@@ -592,6 +630,8 @@ export interface Segment {
  */
 export function computeSegments(duration: number, s: Settings): Segment[] {
   if (!isFinite(duration) || duration <= 0) return [];
+  // v1.3.5: EKSPORT SAJA — seluruh video jadi 1 file utuh tanpa dipecah
+  if (s.splitMode === "off") return [{ start: 0, dur: duration }];
   let segDur =
     s.splitMode === "duration"
       ? clamp(s.splitSeconds, 3, 3600)
@@ -621,3 +661,27 @@ export const QUALITY_INFO: Record<QualityKey, { label: string; desc: string }> =
   balanced: { label: "Seimbang", desc: "Kualitas & kecepatan seimbang (disarankan)" },
   high: { label: "Tinggi", desc: "Kualitas terbaik, render lebih lama" },
 };
+
+/**
+ * v1.3.5 — Deteksi "SPLIT POLOS" utk MESIN KILAT (ala NOVACUT).
+ * true = hasil akhir identik dengan video asli, hanya dipotong-potong:
+ * tidak ada cover, frame neon, efek, transisi, teks, bar sinema, teks
+ * otomatis, perubahan kecepatan/ulang, maupun zoom/geser — sehingga
+ * potongan bisa dibuat TANPA render ulang (-c copy, hitungan detik).
+ */
+export function isPureSplit(s: Settings): boolean {
+  if (s.coverEnabled) return false;
+  if (s.frame !== "none") return false;
+  if (Array.isArray(s.effects) && s.effects.length > 0) return false;
+  if (s.transitionType) return false;
+  if (s.bars) return false;
+  if (s.title.enabled || s.label.enabled || s.desc.enabled) return false;
+  if (s.subtitle.enabled) return false;
+  if (Math.abs((Number(s.speed) || 1) - 1) > 1e-6) return false;
+  if (Math.round(Number(s.loopCount) || 1) !== 1) return false;
+  if (s.ratio !== "full") return false;
+  if (Math.abs((Number(s.zoom) || 1) - 1) > 1e-6) return false;
+  if (Math.abs((Number(s.panX) || 0.5) - 0.5) > 1e-6) return false;
+  if (Math.abs((Number(s.panY) || 0.5) - 0.5) > 1e-6) return false;
+  return true;
+}

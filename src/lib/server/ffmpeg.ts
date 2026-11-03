@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
@@ -15,8 +15,9 @@ import {
   maxCharsFor,
   BAR_H,
   QualityKey,
+  isPureSplit,
 } from "@/lib/video-config";
-import { Job, VideoInfo } from "@/lib/server/jobs";
+import { Job, VideoInfo, jobStore } from "@/lib/server/jobs";
 import { TRANSITIONS, planEffects, OVERLAY_EFFECTS } from "@/lib/novacut-fx";
 import {
   transcribeVideo,
@@ -63,6 +64,63 @@ export async function ensureBaseDirs() {
   await fs.mkdir(EXPORTS_DIR, { recursive: true });
 }
 
+// ============================================================
+// v1.3.5 — PEMBATALAN & ANTI-HANG (ala menu EKSPORT & SPLIT NOVACUT)
+// ============================================================
+// Semua proses ffmpeg yang sedang berjalan dicatat per job. Bila pengguna
+// membatalkan (atau ffmpeg macet tanpa keluaran), proses dibunuh sehingga
+// aplikasi tidak pernah "menggantung selamanya".
+
+const g2 = globalThis as unknown as {
+  __kolosalProcs?: Map<string, Set<ChildProcess>>;
+};
+const activeProcs: Map<string, Set<ChildProcess>> = (g2.__kolosalProcs ??= new Map());
+
+function trackProc(jobId: string, proc: ChildProcess): void {
+  let set = activeProcs.get(jobId);
+  if (!set) {
+    set = new Set();
+    activeProcs.set(jobId, set);
+  }
+  set.add(proc);
+}
+
+function untrackProc(jobId: string, proc: ChildProcess): void {
+  const set = activeProcs.get(jobId);
+  if (!set) return;
+  set.delete(proc);
+  if (set.size === 0) activeProcs.delete(jobId);
+}
+
+/** true bila pengguna sudah minta batal untuk job ini */
+export function isCanceled(job: Job): boolean {
+  return job.cancelRequested === true || job.status === "canceled";
+}
+
+/**
+ * Batalkan job: tandai + bunuh semua proses ffmpeg miliknya.
+ * return false bila job tidak ada / sudah selesai.
+ */
+export function cancelJob(jobId: string): boolean {
+  const job = jobStore.get(jobId);
+  if (!job) return false;
+  if (job.status === "done" || job.status === "error" || job.status === "canceled") return false;
+  job.cancelRequested = true;
+  job.status = "canceled";
+  job.phase = "Dibatalkan";
+  const set = activeProcs.get(jobId);
+  if (set) {
+    for (const p of set) {
+      try {
+        p.kill("SIGKILL");
+      } catch {
+        /* proses sudah mati */
+      }
+    }
+  }
+  return true;
+}
+
 function even(n: number): number {
   return Math.max(2, Math.round(n / 2) * 2);
 }
@@ -106,16 +164,26 @@ export async function probeVideo(p: string): Promise<VideoInfo> {
   if (Math.abs(rot) === 90 || Math.abs(rot) === 270) [w, h] = [h, w];
   const duration = Number(j.format?.duration ?? (v.duration as string) ?? 0);
   if (!duration || !w || !h) throw new Error("Metadata video tidak lengkap");
-  return { duration, width: w, height: h, hasAudio };
+  // v1.3.5: codec asli disimpan — syarat kelayakan MESIN KILAT (-c copy)
+  const codec = typeof v.codec_name === "string" ? v.codec_name.toLowerCase() : "";
+  return { duration, width: w, height: h, hasAudio, codec };
 }
 
 // ============================================================
 // Jalankan ffmpeg dengan laporan progres
+// v1.3.5 anti-hang:
+//  - proses dicatat per job (bisa dibunuh saat dibatalkan pengguna);
+//  - WATCHDOG: bila ffmpeg tidak mengeluarkan progres/stderr apa pun
+//    selama STALL_MS, proses dibunuh dan job gagal dengan pesan jelas —
+//    tidak ada lagi render yang "menggantung selamanya".
 // ============================================================
+const STALL_MS = 90_000; // 90 detik tanpa tanda hidup = macet
+
 async function runFfmpeg(
   args: string[],
   expectedDur: number,
-  onProgress?: (frac: number) => void
+  onProgress?: (frac: number) => void,
+  jobId?: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const full = [...args, "-progress", "pipe:1", "-nostats"];
@@ -126,13 +194,34 @@ async function runFfmpeg(
       /* diagnostik opsional */
     }
     const proc = spawn(FFMPEG_BIN, full);
+    if (jobId) trackProc(jobId, proc);
     let stderr = "";
     let lastFrac = 0;
+    let lastAlive = Date.now();
+    const kick = () => {
+      lastAlive = Date.now();
+    };
+    // ---- watchdog anti-macet ----
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastAlive > STALL_MS) {
+        try {
+          proc.kill("SIGKILL");
+        } catch {
+          /* sudah mati */
+        }
+      }
+    }, 5000);
+    const cleanup = () => {
+      clearInterval(watchdog);
+      if (jobId) untrackProc(jobId, proc);
+    };
     proc.stderr.on("data", (d) => {
+      kick();
       stderr += d.toString();
       if (stderr.length > 8000) stderr = stderr.slice(-8000);
     });
     proc.stdout.on("data", (d) => {
+      kick();
       if (!onProgress) return;
       const lines = d.toString().split(/\r?\n/);
       for (const line of lines) {
@@ -146,19 +235,28 @@ async function runFfmpeg(
         }
       }
     });
-    proc.on("close", (code) => {
+    proc.on("close", (code, signal) => {
+      cleanup();
       if (code === 0) {
         onProgress?.(1);
         resolve();
       } else {
+        const stalled = Date.now() - lastAlive > STALL_MS - 6000;
         reject(
           new Error(
-            `ffmpeg keluar dengan kode ${code}: ${stderr.split("\n").slice(-4).join(" | ") || "tanpa detail"}`
+            stalled
+              ? `ffmpeg macet (tidak ada progres ${Math.round(STALL_MS / 1000)} detik) dan dihentikan otomatis — coba lagi atau pakai Mesin Kilat.`
+              : signal === "SIGKILL"
+                ? "Render dihentikan (dibatalkan pengguna)."
+                : `ffmpeg keluar dengan kode ${code}: ${stderr.split("\n").slice(-4).join(" | ") || "tanpa detail"}`
           )
         );
       }
     });
-    proc.on("error", reject);
+    proc.on("error", (e) => {
+      cleanup();
+      reject(e);
+    });
   });
 }
 
@@ -571,7 +669,7 @@ async function encodePart(
   );
 
   const expected = (coverOn ? coverDur - (transOn ? tdur : 0) : 0) + outPartDur;
-  await runFfmpeg(args, expected, onProgress);
+  await runFfmpeg(args, expected, onProgress, job.id);
   return expected;
 }
 
@@ -637,6 +735,12 @@ export async function runJob(job: Job): Promise<void> {
   await fs.mkdir(tmpDir, { recursive: true });
 
   try {
+    // v1.3.5: job yang dibatalkan saat masih di antrean tidak dijalankan
+    if (isCanceled(job)) {
+      job.status = "canceled";
+      job.phase = "Dibatalkan";
+      return;
+    }
     job.status = "processing";
     job.phase = "Menyiapkan...";
     job.progress = 0;
@@ -651,6 +755,75 @@ export async function runJob(job: Job): Promise<void> {
     job.total = segs.length;
     const word = labelWordFor(s);
     const q = s.quality;
+
+    // ==========================================================
+    // v1.3.5 — MESIN KILAT (ala NOVACUT): potong tanpa render ulang.
+    // Layak bila: mesin bukan "penuh", setelan SPLIT POLOS (isPureSplit),
+    // dan video asli H.264/HEVC (aman ditulis ulang tanpa encode).
+    // ==========================================================
+    const codec = (job.info.codec || "").toLowerCase();
+    const pure = isPureSplit(s);
+    const codecOk = codec === "h264" || codec === "hevc";
+    if (s.engine !== "penuh" && pure && codecOk) {
+      job.engineUsed = "kilat";
+      job.phase = "MESIN KILAT — memotong tanpa render ulang...";
+      for (let i = 0; i < segs.length; i++) {
+        if (isCanceled(job)) {
+          job.status = "canceled";
+          job.phase = "Dibatalkan";
+          return;
+        }
+        const seg = segs[i];
+        const n = i + 1;
+        job.phase = `Bagian ${n}/${segs.length}: memotong (kilat)...`;
+        const outFile = `${sanitizeFile(job.title)}-${word}-${n}.mp4`;
+        const outPath = path.join(outDir, outFile);
+        // -ss sebelum -i + -c copy = potong di keyframe tanpa encode:
+        // kecepatan setara menyalin file (±1–3 detik per bagian).
+        await runFfmpeg(
+          [
+            "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+            "-ss", seg.start.toFixed(3),
+            "-t", seg.dur.toFixed(3),
+            "-i", job.uploadPath,
+            "-c", "copy",
+            "-avoid_negative_ts", "make_zero",
+            "-movflags", "+faststart",
+            outPath,
+          ],
+          seg.dur,
+          (frac) => {
+            job.progress = (i + frac) / segs.length;
+          },
+          job.id
+        );
+        const thumbName = `thumb_${n}.jpg`;
+        try {
+          await extractThumb(outPath, Math.min(1, seg.dur * 0.1), path.join(thumbDir, thumbName));
+        } catch {
+          /* thumbnail opsional */
+        }
+        const st = await fs.stat(outPath);
+        job.parts.push({
+          file: outFile,
+          thumb: thumbName,
+          size: st.size,
+          duration: seg.dur,
+        });
+        job.progress = (i + 1) / segs.length;
+      }
+      job.status = "done";
+      job.phase = "Selesai (MESIN KILAT — tanpa render ulang)";
+      job.progress = 1;
+      return;
+    }
+    // pesan jelas bila pengguna memaksa KILAT tapi setelan/video tidak layak
+    if (s.engine === "kilat" && !pure) {
+      job.phase = "Ada cover/efek/teks aktif — MESIN KILAT otomatis pakai render penuh...";
+    } else if (s.engine === "kilat" && !codecOk) {
+      job.phase = "Video bukan H.264/HEVC — MESIN KILAT otomatis pakai render penuh...";
+    }
+    job.engineUsed = "penuh";
 
     // v1.3.3 — TEKS OTOMATIS (suara → teks, Whisper offline, Bahasa Indonesia):
     // baca suara SEKALI di video asli, lalu tiap bagian mengambil teks sesuai
@@ -763,6 +936,12 @@ export async function runJob(job: Job): Promise<void> {
     }
 
     for (let i = 0; i < segs.length; i++) {
+      // v1.3.5: cek pembatalan antar bagian — berhenti bersih, bagian selesai tetap disimpan
+      if (isCanceled(job)) {
+        job.status = "canceled";
+        job.phase = "Dibatalkan";
+        return;
+      }
       const seg = segs[i];
       const n = i + 1;
       job.phase = `Bagian ${n}/${segs.length}: merender`;
@@ -838,6 +1017,12 @@ export async function runJob(job: Job): Promise<void> {
     job.phase = "Selesai";
     job.progress = 1;
   } catch (e) {
+    // v1.3.5: pembatalan pengguna (proses dibunuh) = status batal, bukan gagal
+    if (isCanceled(job)) {
+      job.status = "canceled";
+      job.phase = "Dibatalkan";
+      return;
+    }
     job.status = "error";
     job.phase = "Gagal";
     job.error = String((e as Error)?.message ?? e).slice(0, 600);
