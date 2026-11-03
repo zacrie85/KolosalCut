@@ -108,6 +108,17 @@ export async function POST(req: NextRequest) {
       parts: [],
       createdAt: Date.now(),
       outDir: outputDir,
+      // v1.3.5: PNG cover ala NOVACUT (overlay utama + teks PART per bagian)
+      coverOverlay:
+        typeof body.coverOverlay === "string" && body.coverOverlay.startsWith("data:image/")
+          ? body.coverOverlay.slice(0, 14_000_000)
+          : null,
+      coverParts: Array.isArray(body.coverParts)
+        ? body.coverParts
+            .filter((x: unknown): x is string => typeof x === "string" && x.startsWith("data:image/"))
+            .slice(0, 50)
+            .map((x: string) => x.slice(0, 6_000_000))
+        : [],
     };
     jobStore.set(jobId, job);
 

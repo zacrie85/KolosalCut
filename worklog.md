@@ -204,3 +204,25 @@ Work Log:
 
 Stage Summary:
 - Impor batch kini benar-benar mengunggah: 3 video uji -> SIAP -> PROSES SEMUA -> SELESAI end-to-end
+---
+Task ID: 10
+Agent: main (Z.ai)
+Task: v1.3.5 — port penuh COVER & EFEK ala NOVACUT Studio + ZOOM & GESER 4 arah; panel jadi 5 menu utama (VIDEO/TEKS/GAYA/EFEK/COVER)
+
+Work Log:
+- Permintaan user: (1) ganti semua menu cover KolosalCut dengan menu & gaya cover NOVACUT Studio; (2) tambahkan semua menu efek NOVACUT → 5 menu utama VIDEO/TEKS/GAYA/EFEK/COVER. Melanjutkan ZOOM & GESER v1.3.5 (panY + zoom 1–5×) yang sudah setengah jadi
+- src/lib/novacut-fx.ts (baru): registry 28 transisi (4 kategori, dgn pemetaan filter xfade FFmpeg) + 20 efek blockbuster (8 color grading + 12 efek visual) + EFFECT_FFMPEG/planEffects (rantai filter_complex berlabel: bloom split/blend, shake crop expressi, pulse & kenburns zoompan, overlay scanline/spotlight/flare) + 100 template cover (10 layout × 10 palet) + aiRecommendTemplates deterministik per judul
+- src/lib/cover-render.ts (baru): port covers.ts NOVACUT → renderCoverCanvas (bg img/hitam/transparan, shade gradasi, grafis layout + judul, badge PART terpisah, bingkai klasik/modern/futuristik 75%), drawPartBadgeAt per layout, generateCoverPayload (PNG overlay utama + PNG teks PART per bagian utk job), grabFrame/loadImage/sampleBrightness; font NOVACUT dipetakan ke font bundel (impact→Anton, condensed→Bebas, display→Archivo, sans→Montserrat)
+- video-config.ts: settings baru coverTemplate/coverMode/coverBg/coverFrameStyle/coverManualPlain/coverImage(dataURL) + effects[] + transitionType/transitionDur + speed/loopCount; sanitize lengkap (id transisi & efek divalidasi registry, dataURL gambar dibatasi 12MB)
+- settings-panel.tsx: restruktur total 5 tab; tab VIDEO = Pemotongan + Rasio&Zoom (ZOOM & GESER penuh: slider 1–5×, PanPad 4 arah + tengah, ISI FRAME dgn target zoom, RESET, readout X/Y) + Paralel + Kualitas + Folder + Teks Otomatis; tab EFEK baru (TransitionPicker kategori ala NOVACUT + durasi + Hapus; grid 20 efek grade/fx + Bersihkan; slider Speed & Ulang); tab COVER baru (switch, pratinjau kanvas live, Klasik KolosalCut/100 template + rekomendasi AI + galeri grid, sumber auto/manual + gambar apa adanya, latar adegan/hitam + scope sama/beda, bingkai, posisi frame, durasi); penomoran section per tab dirapikan
+- preview-canvas.tsx: pratinjau live efek ala NOVACUT (port visual.ts) — gradeFilterString di ctx.filter, applyGradeTints, applyOverlays (rgb/echo/scanline/vignette/spotlight/grain/bloom/flare/letterbox), clipTransform (kenburns/pulse/shake) mengikuti waktu & bagian aktif; grainPattern dibuat sekali
+- page.tsx: kirim videoWidth/Height/Url/Duration ke SettingsPanel; saat PROSES SEMUA, generateCoverPayload menghasilkan PNG overlay+parts (fallback aman ke cover klasik bila gagal); body job + coverOverlay/coverParts
+- api/process + jobs.ts: Job menerima coverOverlay/coverParts (validasi dataURL, maks 50 bagian)
+- ffmpeg.ts encodePart: rantai efek pada [pv0] sebelum frame neon/teks; setpts kecepatan SETELAH teks/subtitle (tetap sinkron, ikut terulang); ULANG via -stream_loop (penting: -t = seg.dur × loops karena membatasi total iterasi); atempoChain utk audio 0.25–4×; transisi xfade cover→isi (offset=coverDur−tdur, audio cover dipendekkan sepanjang overlap) atau hitam→isi saat cover mati; format=yuv420p sebelum xfade; cover NOVACUT = frame/hitam/manual → zoompan slow-zoom → overlay PNG (bingkai di atas bar sinema) → PNG PART; cover lama tetap utuh (legacy); durasi part dicatat realistis (xfade/speed/loop)
+- Aset baru (Python PIL/numpy): resources/overlays/flare.png (radial hangat), scanline.png (baris CRT 16%), spotlight.png (sorot panggung) — otomatis ikut extraResources
+- Perbaikan bug saat uji: (1) -t setelah -stream_loop membatasi total → loop 2× hanya 4.5s → kini seg.dur×loops (E2E B: 8.03s ✓); (2) drawPartBadgeAt menghapus kanvas dgn clearRect → cover pratinjau kosong → clearRect dihapus (pratinjau 99% terisi ✓); (3) teks badge tidak terpusat (bug bawaan port) → tx = bx+boxW/2 saat align center; (4) efek paint tidak jalan saat tab COVER dibuka → dep `tab` ditambahkan
+- Uji: eslint + tsc bersih; next build sukses; E2E server 3 job (cover NOVACUT+efek+flash → 6.4s ✓; hitam+futuristik+speed2/loop2+kenburns → 8.0s ✓; manual+letterbox → 7.0s ✓, sanitasi menolak id transisi salah dgn aman); E2E UI nyata (agent-browser): unggah via input file → 5 tab tampil → grid 100/100 thumbnail tergambar → efek & transisi aktif → pratinjau live ter-grade → PROSES SEMUA → SELESAI 10.0s ✓, frame cover NOVACUT asli (judul+aksen+badge di atas adegan) terverifikasi visual
+- package.json 1.3.5; RELEASE_NOTES.md seksi v1.3.5
+
+Stage Summary:
+- KolosalCut kini punya 5 menu utama: VIDEO (zoom & geser 4 arah 1–5× + ISI FRAME/RESET), TEKS, GAYA (frame neon), EFEK (28 transisi + 20 efek blockbuster + speed/ulang), COVER (Cover Studio 100 template ala NOVACUT + bingkai + hitam/manual + AI rekomendasi) — semua tervalidasi E2E dari UI sampai MP4

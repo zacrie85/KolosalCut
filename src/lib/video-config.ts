@@ -2,6 +2,12 @@
 // KolosalCut — Konfigurasi bersama (client & server)
 // ============================================================
 
+import {
+  TRANSITIONS,
+  isValidEffect,
+  getCoverTemplate,
+} from "@/lib/novacut-fx";
+
 export type SplitMode = "duration" | "parts";
 export type LabelFormat = "part" | "bagian" | "eps" | "episode" | "custom";
 export type RatioMode = "full" | "fit";
@@ -223,6 +229,17 @@ export interface LabelElement extends TextElement {
   prefix: string;
 }
 
+// ============================================================
+// EFEK & COVER ala NOVACUT (v1.3.5)
+// ============================================================
+
+/** sumber latar cover: adegan dari video / unggahan sendiri */
+export type CoverMode = "auto" | "manual";
+/** latar cover mode otomatis: adegan video / hitam polos */
+export type CoverBg = "adegan" | "hitam";
+/** bingkai cover ala NOVACUT */
+export type CoverFrameStyle = "none" | "klasik" | "modern" | "futuristik";
+
 export interface Settings {
   splitMode: SplitMode;
   splitSeconds: number;
@@ -231,6 +248,30 @@ export interface Settings {
   coverSame: boolean;
   coverDuration: number;
   coverPos: "awal" | "tengah";
+  // ---- v1.3.5: cover ala NOVACUT (100 template) ----
+  /** "layout--palet" dari COVER_TEMPLATES; "legacy" = cover teks klasik lama */
+  coverTemplate: string;
+  /** sumber cover: otomatis frame video / unggahan sendiri */
+  coverMode: CoverMode;
+  /** latar mode otomatis: adegan video / hitam polos */
+  coverBg: CoverBg;
+  /** bingkai di sekeliling cover */
+  coverFrameStyle: CoverFrameStyle;
+  /** mode manual: gambar apa adanya tanpa teks */
+  coverManualPlain: boolean;
+  /** gambar unggahan (dataURL) — hanya dikirim saat membuat job */
+  coverImage?: string;
+  // ---- v1.3.5: efek blockbuster ala NOVACUT ----
+  /** id efek (CLIP_EFFECTS) yang aktif */
+  effects: string[];
+  /** transisi masuk tiap bagian (id TRANSITIONS) atau null */
+  transitionType: string | null;
+  /** durasi transisi (detik) */
+  transitionDur: number;
+  /** kecepatan 0.25–4 (1 = normal) */
+  speed: number;
+  /** ulang potongan 1–10 (1 = sekali) */
+  loopCount: number;
   title: TextElement;
   label: LabelElement;
   desc: TextElement;
@@ -239,9 +280,12 @@ export interface Settings {
   bars: boolean;
   barSize: BarSize;
   ratio: RatioMode;
+  /** perbesaran video 1 (normal) – 5 — v1.3.5: naik dari 2.5 agar video sinema bisa di-isi-frame penuh */
   zoom: number;
   /** posisi horizontal ambil gambar 0 (kiri) – 1 (kanan); 0.5 = tengah */
   panX: number;
+  /** posisi vertikal ambil gambar 0 (atas) – 1 (bawah); 0.5 = tengah — v1.3.5 */
+  panY: number;
   quality: QualityKey;
   /** jumlah video yang diproses serentak */
   parallel: ParallelKey;
@@ -269,6 +313,19 @@ export const DEFAULT_SETTINGS: Settings = {
   coverSame: false,
   coverDuration: 2,
   coverPos: "tengah",
+  // v1.3.5: cover default = template NOVACUT populer (Impact Center · Cyber Neon)
+  coverTemplate: "impact--cyber",
+  coverMode: "auto",
+  coverBg: "adegan",
+  coverFrameStyle: "none",
+  coverManualPlain: false,
+  coverImage: "",
+  // v1.3.5: efek & transisi mati secara bawaan (hasil = video bersih)
+  effects: [],
+  transitionType: null,
+  transitionDur: 0.6,
+  speed: 1,
+  loopCount: 1,
   title: {
     enabled: true,
     text: "",
@@ -301,6 +358,8 @@ export const DEFAULT_SETTINGS: Settings = {
   ratio: "full",
   zoom: 1,
   panX: 0.5,
+  // v1.3.5: posisi vertikal bawaan = tengah, konsisten dgn panX
+  panY: 0.5,
   quality: "balanced",
   // v1.3.2: default 2× — antrean panjang (mis. 50 video) hanya memproses
   // 2 video serentak; selesai satu, langsung lanjut antrean berikutnya.
@@ -438,6 +497,35 @@ export function sanitizeSettings(raw: unknown): Settings {
     coverSame: typeof r.coverSame === "boolean" ? r.coverSame : d.coverSame,
     coverDuration: clamp(Number(r.coverDuration) || d.coverDuration, 1, 5),
     coverPos: r.coverPos === "awal" ? "awal" : "tengah",
+    // v1.3.5: cover ala NOVACUT — template divalidasi terhadap registry;
+    // "legacy" dipertahankan agar cover teks klasik masih bisa dipakai
+    coverTemplate:
+      r.coverTemplate === "legacy"
+        ? "legacy"
+        : getCoverTemplate(String(r.coverTemplate ?? ""))?.id ?? d.coverTemplate,
+    coverMode: r.coverMode === "manual" ? "manual" : "auto",
+    coverBg: r.coverBg === "hitam" ? "hitam" : "adegan",
+    coverFrameStyle: (["none", "klasik", "modern", "futuristik"] as CoverFrameStyle[]).includes(
+      r.coverFrameStyle as CoverFrameStyle
+    )
+      ? (r.coverFrameStyle as CoverFrameStyle)
+      : d.coverFrameStyle,
+    coverManualPlain: typeof r.coverManualPlain === "boolean" ? r.coverManualPlain : d.coverManualPlain,
+    coverImage:
+      typeof r.coverImage === "string" && /^data:image\/(png|jpe?g|webp);base64,/.test(r.coverImage)
+        ? r.coverImage.slice(0, 12_000_000)
+        : "",
+    // v1.3.5: efek blockbuster — urutan dinormalkan sesuai registry, maks 20
+    effects: Array.isArray(r.effects)
+      ? [...new Set(r.effects.filter((x): x is string => isValidEffect(String(x))))].slice(0, 20)
+      : d.effects,
+    transitionType:
+      r.transitionType && TRANSITIONS.some((t) => t.id === r.transitionType)
+        ? (r.transitionType as string)
+        : null,
+    transitionDur: clamp(Number(r.transitionDur) || d.transitionDur, 0.2, 2),
+    speed: clamp(Number(r.speed) || d.speed, 0.25, 4),
+    loopCount: clamp(Math.round(Number(r.loopCount) || d.loopCount), 1, 10),
     title: pickText(r.title, d.title),
     label,
     desc: pickText(r.desc, d.desc),
@@ -447,8 +535,11 @@ export function sanitizeSettings(raw: unknown): Settings {
       ? (r.barSize as BarSize)
       : d.barSize,
     ratio: r.ratio === "fit" ? "fit" : "full",
-    zoom: clamp(Number(r.zoom) || d.zoom, 1, 2.5),
+    // v1.3.5: zoom diperluas sampai 5× (data lama dgn zoom kecil tetap aman)
+    zoom: clamp(Number(r.zoom) || d.zoom, 1, 5),
     panX: Number.isFinite(Number(r.panX)) ? clamp(Number(r.panX), 0, 1) : d.panX,
+    // v1.3.5: geser atas–bawah (0 = atas, 0.5 = tengah, 1 = bawah)
+    panY: Number.isFinite(Number(r.panY)) ? clamp(Number(r.panY), 0, 1) : d.panY,
     quality: (["fast", "balanced", "high"] as QualityKey[]).includes(r.quality as QualityKey)
       ? (r.quality as QualityKey)
       : d.quality,

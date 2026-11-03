@@ -1,3 +1,58 @@
+# KolosalCut v1.3.5
+
+Rilis terbesar KolosalCut! Panel pengaturan kini punya **5 MENU UTAMA**: **VIDEO, TEKS, GAYA, EFEK, COVER** — membawa **seluruh gaya COVER** dan **seluruh EFEK** ala NOVACUT Studio, plus **ZOOM & GESER bebas 4 arah**.
+
+## 1. Menu COVER Baru — Cover Studio ala NOVACUT (100 Template!)
+
+Menu cover lama digantikan penuh dengan **Cover Studio**:
+
+- **100 template cover** = 10 layout × 10 palet warna: *Impact Center, Lower Third, Top Banner, Gradient Side, Boxed Title, Neon Glow, Cinematic Bars, Sticker Badge, Outline Raksasa, Diagonal Band* × palet *Cyber Neon, Sunset Fire, Gold Luxury, Ice Cool, Toxic Green, Royal Purple, Blood Red, Monochrome, Candy Pop, Ocean Deep*.
+- **REKOMENDASI AI** — 6 template paling cocok dipilih otomatis dari judul & kecerahan frame video.
+- **SEMUA TEMPLATE (100)** — buka galeri miniatur untuk melihat 100 gaya sekaligus dengan judul videomu sendiri.
+- **Sumber cover**: *Otomatis dari Video* (adegan terbaik dari tiap bagian) atau *Unggah Sendiri* (PNG/JPG, bisa "gambar apa adanya" tanpa teks).
+- **Latar cover**: *Adegan dari Video* dengan pilihan **Tiap Bagian Beda / Semua Bagian Sama**, atau *Hitam Polos* gaya trailer klasik.
+- **Bingkai cover transparan 75%**: *Klasik* (emas vintage), *Modern* (minimalis), *Futuristik* (sudut HUD menyala), atau tanpa bingkai.
+- **Pratinjau cover langsung** di dalam panel — persis seperti hasil render.
+- Judul & label PART otomatis tertata sesuai gaya template yang dipilih.
+- Masih suka cover lama? Pilih **"Klasik KolosalCut (teks judul sederhana)"**.
+
+## 2. Menu EFEK Baru — 28 Transisi + 20 Efek Blockbuster ala NOVACUT
+
+- **TRANSISI MASUK TIAP BAGIAN (28)** dalam 4 kategori:
+  - *Trailer Hollywood*: Flash Snap, Whip Pan, Zoom Punch, Zoom Blast, RGB Glitch, Impact Shake, Cinematic Bars, Film Burn
+  - *Iklan Produk*: Slide 4 arah, Push Parallax, Diagonal Wipe, Iris Circle, Window Blinds, Split Reveal, Bounce Pop, Flare Sweep
+  - *Sinematik*: Cross Dissolve, Dip ke Hitam/Putih, Blur Dissolve
+  - *Trend Viral*: Spin Swap, Pixelate, TV Static, Chromatic Slide, Mosaic Reveal
+  - Slider durasi transisi 0.2–2 detik.
+- **EFEK BLOCKBUSTER (20)** — bisa dipadukan bebas:
+  - *Color Grading (8)*: Teal & Orange, Bleach Bypass, Noir, Vintage Film, VHS Retro, Cyberpunk Neon, Golden Hour, Thriller Dingin
+  - *Efek Visual (12)*: Bar Sinematik, Vignette, Film Grain, Bloom Glow, Lens Flare, RGB Split, Scanline CRT, Handheld Shake, Beat Pulse, Slow Zoom (Ken Burns), Ghost Trail, Spotlight
+- **KECEPATAN & ULANG**: slow-motion 0.25× sampai time-lapse 4×, dan ulang potongan sampai 10× — teks otomatis & efek tetap sinkron.
+- Semua efek tampil **live di monitor pratinjau**, dan diterapkan ke **setiap bagian** hasil render.
+
+## 3. Menu VIDEO — ZOOM & GESER Bebas 4 Arah (ala NOVACUT)
+
+- Zoom diperluas **1–5×** (sebelumnya maks 2.5×).
+- **Pad panah 4 arah** untuk menggeser area gambar: kiri–kanan **dan** atas–bawah, dengan pembacaan **X/Y %** langsung.
+- Tombol **ISI FRAME** — menghitung zoom otomatis sampai bar hitam hilang (mode 9:16 Biasa).
+- Tombol **RESET** — kembali ke tengah & zoom 1×.
+
+## Cara Upgrade
+
+1. **Uninstall** KolosalCut lama (Settings → Apps → KolosalCut → Uninstall).
+2. Unduh & install **`KolosalCut-Setup-1.3.5.exe`** (di bawah).
+3. Jika SmartScreen muncul: **More info → Run anyway**.
+4. Buka aplikasi — pastikan header tertulis **v1.3.5**.
+
+## Isi Rilis
+
+| Berkas | Keterangan |
+|---|---|
+| `KolosalCut-Setup-1.3.5.exe` | Installer Windows (disarankan) |
+| `KolosalCut-Portable-1.3.5.exe` | Versi portabel tanpa instalasi |
+
+---
+
 # KolosalCut v1.3.4
 
 Fitur baru pada **Teks Otomatis**: **slider POSISI TEKS** — naikkan atau turunkan posisi teks subtitle di video sesuka hatimu.

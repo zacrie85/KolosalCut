@@ -16,6 +16,13 @@ import {
 } from "@/lib/video-config";
 import { Button } from "@/components/ui/button";
 import { Film, Play, Pause, SkipBack, SkipForward, Image as ImageIcon } from "lucide-react";
+import {
+  gradeFilterString,
+  applyGradeTints,
+  applyOverlays,
+  clipTransform,
+  makeNoisePattern,
+} from "@/lib/fx-preview";
 
 const CW = 540; // lebar kanvas internal
 const CH = 960; // tinggi kanvas internal
@@ -65,6 +72,15 @@ export function PreviewCanvas({
   const [cursor, setCursor] = useState<string>("default");
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
+  // v1.3.5: kanvas bantu & pola noise utk pratinjau efek
+  const scratchRef = useRef<HTMLCanvasElement | null>(null);
+  const grainRef = useRef<CanvasPattern | null>(null);
+  useEffect(() => {
+    if (grainRef.current) return;
+    const c = canvasRef.current;
+    const ctx = c?.getContext("2d");
+    if (ctx) grainRef.current = makeNoisePattern(ctx);
+  }, []);
 
   // gambar overlay frame (webp animasi neon / png minimalis) — digambar tiap frame,
   // sehingga animasi webp ikut bergerak di pratinjau
@@ -141,35 +157,75 @@ export function PreviewCanvas({
 
     const hasVideo = video && videoUrl && video.readyState >= 2 && video.videoWidth > 0;
 
+    // ---- v1.3.5: efek blockbuster ala NOVACUT (pratinjau live) ----
+    const fxList = settings.effects ?? [];
+    let fxScale = 1;
+    let fxDx = 0;
+    let fxDy = 0;
+    let fxLocal = 0;
+    let fxProgress = 0;
+    if (fxList.length > 0 && duration > 0) {
+      const segsFx = computeSegments(duration, settings);
+      const segFx = segsFx[Math.min(partNum, segsFx.length) - 1];
+      if (segFx) {
+        const vNow = video?.currentTime ?? 0;
+        fxLocal = Math.max(0, vNow - segFx.start);
+        fxProgress = Math.min(1, Math.max(0, segFx.dur > 0 ? fxLocal / segFx.dur : 0));
+        const tr = clipTransform(fxList, fxLocal, fxProgress, vNow);
+        fxScale = tr.scale;
+        fxDx = tr.dx * SC;
+        fxDy = tr.dy * SC;
+      }
+    }
+    const grade = gradeFilterString(fxList);
+
     if (hasVideo) {
       const vw = video.videoWidth;
       const vh = video.videoHeight;
-      // posisi horizontal ambil gambar: 0 = kiri, 0.5 = tengah, 1 = kanan
+      // v1.3.5: geser bebas 4 arah — panX (kiri–kanan) & panY (atas–bawah),
+      // pemetaan identik dgn filter FFmpeg (crop/overlay pakai panX & panY)
+      // sehingga pratinjau = hasil render (WYSIWYG).
       const panX = Math.min(1, Math.max(0, settings.panX));
+      const panY = Math.min(1, Math.max(0, settings.panY));
       const drawCover = (scaleMul: number, usePan = true) => {
-        const s = Math.max(CW / vw, CH / vh) * settings.zoom * scaleMul;
-        const w = vw * s;
-        const h = vh * s;
-        ctx.drawImage(video, usePan ? (CW - w) * panX : (CW - w) / 2, (CH - h) / 2, w, h);
+        const s0 = Math.max(CW / vw, CH / vh) * settings.zoom * scaleMul * fxScale;
+        const w = vw * s0;
+        const h = vh * s0;
+        ctx.drawImage(video, (usePan ? (CW - w) * panX : (CW - w) / 2) + fxDx, (CH - h) * panY + fxDy, w, h);
       };
       const drawContain = (scaleMul: number) => {
-        const s = Math.min(CW / vw, CH / vh) * settings.zoom * scaleMul;
-        const w = vw * s;
-        const h = vh * s;
-        ctx.drawImage(video, (CW - w) * panX, (CH - h) / 2, w, h);
+        const s0 = Math.min(CW / vw, CH / vh) * settings.zoom * scaleMul * fxScale;
+        const w = vw * s0;
+        const h = vh * s0;
+        ctx.drawImage(video, (CW - w) * panX + fxDx, (CH - h) * panY + fxDy, w, h);
       };
 
       if (settings.ratio === "full") {
+        ctx.filter = grade === "none" ? "none" : grade;
         drawCover(1);
       } else {
-        // latar blur (tetap tengah, hanya dekorasi)
-        ctx.filter = "blur(22px) brightness(0.55) saturate(0.8)";
+        // latar blur (tetap tengah, hanya dekorasi) — grading ikut diterapkan
+        ctx.filter = grade === "none" ? "blur(22px) brightness(0.55) saturate(0.8)" : `blur(22px) brightness(0.55) saturate(0.8) ${grade}`;
         drawCover(1.12, false);
         // video utama berisi — digeser sesuai posisi ambil
-        ctx.filter = "none";
+        ctx.filter = grade === "none" ? "none" : grade;
         drawContain(1);
       }
       ctx.filter = "none";
+
+      // lapisan efek di atas video (senada dgn rantai filter FFmpeg):
+      // tint grading -> bloom/rgb/echo/scanline/vignette/spotlight/grain/flare
+      if (fxList.length > 0) {
+        if (!scratchRef.current) scratchRef.current = document.createElement("canvas");
+        applyGradeTints(ctx, fxList, CW, CH);
+        applyOverlays(ctx, fxList, CW, CH, {
+          t: video.currentTime,
+          local: fxLocal,
+          progress: fxProgress,
+          grainPattern: grainRef.current,
+          scratch: scratchRef.current,
+        });
+      }
     } else {
       ctx.fillStyle = "#18181b";
       ctx.fillRect(0, 0, CW, CH);
@@ -286,7 +342,7 @@ export function PreviewCanvas({
         ctx.restore();
       }
     }
-  }, [settings, partNum, videoUrl]);
+  }, [settings, partNum, videoUrl, duration]);
 
   // loop gambar
   useEffect(() => {

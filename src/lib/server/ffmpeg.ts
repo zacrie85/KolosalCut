@@ -17,6 +17,7 @@ import {
   QualityKey,
 } from "@/lib/video-config";
 import { Job, VideoInfo } from "@/lib/server/jobs";
+import { TRANSITIONS, planEffects, OVERLAY_EFFECTS } from "@/lib/novacut-fx";
 import {
   transcribeVideo,
   buildAssForPart,
@@ -224,6 +225,44 @@ async function writeTextFile(dir: string, name: string, text: string) {
 }
 
 // ============================================================
+// v1.3.5 — EFEK, TRANSISI, SPEED/LOOP & COVER ala NOVACUT
+// ============================================================
+
+/** berkas PNG cover ala NOVACUT yang sudah ditulis di tmpDir */
+interface CoverArt {
+  /** PNG overlay utama (gradasi + grafis template + judul + bingkai) */
+  ov?: string | null;
+  /** fungsi mengambil PNG teks PART utk bagian ke-n (null = tanpa) */
+  ptFor?: (n: number) => string | null;
+  /** latar hitam polos (tanpa frame video) */
+  black?: boolean;
+  /** gambar unggahan pengguna (mode manual) */
+  manualPath?: string | null;
+}
+
+/** rantai atempo utk kecepatan 0.25–4 (satu atempo hanya 0.5–2) */
+function atempoChain(sp: number): string {
+  const parts: string[] = [];
+  let rem = sp;
+  while (rem > 2.0 + 1e-9) {
+    parts.push("atempo=2.0");
+    rem /= 2;
+  }
+  while (rem < 0.5 - 1e-9) {
+    parts.push("atempo=0.5");
+    rem *= 2;
+  }
+  parts.push(`atempo=${rem.toFixed(4)}`);
+  return parts.join(",");
+}
+
+/** tulis dataURL (PNG/JPG) ke berkas */
+async function writeDataUrl(dataUrl: string, out: string): Promise<void> {
+  const b64 = dataUrl.slice(dataUrl.indexOf(";base64,") + 8);
+  await fs.writeFile(out, Buffer.from(b64, "base64"));
+}
+
+// ============================================================
 // Render satu bagian final (cover + isi) dalam satu perintah
 // ============================================================
 async function encodePart(
@@ -234,32 +273,71 @@ async function encodePart(
   outPath: string,
   tmpDir: string,
   onProgress: (frac: number) => void,
-  assPath: string | null = null
-): Promise<void> {
+  assPath: string | null = null,
+  coverArt: CoverArt = {}
+): Promise<number> {
   const s = job.settings;
-  const coverOn = s.coverEnabled && !!framePath;
+  const fps = 30;
+  // ---- transisi (ala NOVACUT: tampil di awal bagian) ----
+  const transMeta = s.transitionType
+    ? TRANSITIONS.find((t) => t.id === s.transitionType) ?? null
+    : null;
   const coverDur = s.coverDuration;
-  const NF = Math.max(2, Math.round(coverDur * 30));
+  const transOn = !!transMeta;
+  // durasi transisi dibatasi: dgn cover jangan habiskan seluruh cover; tanpa
+  // cover jangan melebihi separuh isi bagian
+  const tdur = transOn
+    ? Math.max(0.2, Math.min(s.transitionDur, coverOnLater() - 0.2))
+    : 0;
+  function coverOnLater(): number {
+    // cover dianggap aktif bila ada sumber latar (frame/hitam/manual)
+    return coverArt.black || coverArt.manualPath || framePath ? coverDur : seg.dur / 2;
+  }
+  // ---- kecepatan & ulang ----
+  const speed = Math.min(4, Math.max(0.25, Number(s.speed) || 1));
+  const loops = Math.min(10, Math.max(1, Math.round(Number(s.loopCount) || 1)));
+  const outPartDur = (seg.dur * loops) / speed;
+  const NF = Math.max(2, Math.round(coverDur * fps));
   const q = QUALITY[s.quality];
 
+  const novacutCover = !!coverArt.ov && s.coverEnabled;
+  const coverOn = s.coverEnabled && (!!coverArt.manualPath || !!coverArt.black || !!framePath);
+
   const args: string[] = ["-y", "-hide_banner", "-loglevel", "error", "-nostdin"];
-  args.push("-ss", seg.start.toFixed(3), "-t", seg.dur.toFixed(3), "-i", job.uploadPath);
+  // v1.3.5: ULANG — putar ulang segmen yang sama (audio+video tetap sinkron).
+  // CATATAN: -t setelah -stream_loop membatasi TOTAL semua iterasi, jadi
+  // durasinya = seg.dur * loops (bukan seg.dur saja).
+  if (loops > 1) args.push("-stream_loop", String(loops - 1));
+  args.push("-ss", seg.start.toFixed(3), "-t", (seg.dur * loops).toFixed(3), "-i", job.uploadPath);
 
   let idx = 1;
-  let coverInput = -1;
+  let frameIdx = -1;
+  let blackIdx = -1;
   let silCover = -1;
   let silPart = -1;
-  if (coverOn) {
-    args.push("-i", framePath!);
-    coverInput = idx++;
+  let ovCover = -1;
+  let ovMain = -1;
+  let ovArtIdx = -1;
+  let ptIdx = -1;
+  let transBlackIdx = -1;
+  const fxInputs: Partial<Record<string, number>> = {};
+
+  if (coverOn && !coverArt.black) {
+    args.push("-i", coverArt.manualPath ?? framePath!);
+    frameIdx = idx++;
+  }
+  if (coverOn && coverArt.black) {
+    args.push("-f", "lavfi", "-t", coverDur.toFixed(2), "-i", "color=c=black:s=1080x1920:r=30");
+    blackIdx = idx++;
   }
   if (coverOn) {
-    args.push("-f", "lavfi", "-t", coverDur.toFixed(2), "-i", "anullsrc=r=44100:cl=stereo");
+    // saat transisi aktif, audio cover dipendekkan sepanjang overlap xfade
+    const silD = transOn ? Math.max(0.2, coverDur - tdur) : coverDur;
+    args.push("-f", "lavfi", "-t", silD.toFixed(2), "-i", "anullsrc=r=44100:cl=stereo");
     silCover = idx++;
   }
   if (!job.info.hasAudio) {
-    const t = coverOn ? seg.dur.toFixed(2) : seg.dur.toFixed(2);
-    args.push("-f", "lavfi", "-t", t, "-i", "anullsrc=r=44100:cl=stereo");
+    args.push("-f", "lavfi", "-t", outPartDur.toFixed(2), "-i", "anullsrc=r=44100:cl=stereo");
     silPart = idx++;
   }
 
@@ -267,9 +345,7 @@ async function encodePart(
   // Dua input terpisah dengan durasi TERBATAS (-t): input loop tak terbatas yang
   // dibagi split ke cabang dengan laju konsumsi berbeda akan menumpuk memori tanpa batas.
   const style = getFrameStyle(s.frame);
-  const frameOn = style.kind !== "none" && !!style.overlay;
-  let ovCover = -1;
-  let ovMain = -1;
+  const frameOn = !novacutCover && style.kind !== "none" && !!style.overlay;
   const overlaySrc = () =>
     style.kind === "anim"
       ? path.join(OVERLAYS_DIR, style.overlay!, "frame_%04d.png")
@@ -287,32 +363,59 @@ async function encodePart(
     args.push(
       "-loop", "1",
       "-framerate", String(style.fps ?? 24),
-      "-t", (seg.dur + 1).toFixed(2),
+      "-t", (seg.dur * loops + 1).toFixed(2),
       "-i", overlaySrc()
     );
     ovMain = idx++;
   }
 
+  // ---- v1.3.5: input PNG cover ala NOVACUT ----
+  if (novacutCover) {
+    args.push("-loop", "1", "-t", (coverDur + 0.5).toFixed(2), "-i", coverArt.ov!);
+    ovArtIdx = idx++;
+    const pt = coverArt.ptFor?.(partNum);
+    if (pt) {
+      args.push("-loop", "1", "-t", (coverDur + 0.5).toFixed(2), "-i", pt);
+      ptIdx = idx++;
+    }
+  }
+
+  // ---- v1.3.5: input overlay efek (scanline/spotlight/flare) ----
+  const fxPlan = planEffects(s.effects ?? [], seg.dur, fps);
+  if (fxPlan) {
+    for (const kind of fxPlan.overlays) {
+      args.push("-loop", "1", "-t", (seg.dur * loops + 1).toFixed(2), "-i", path.join(OVERLAYS_DIR, OVERLAY_EFFECTS[kind]));
+      fxInputs[kind] = idx++;
+    }
+  }
+
+  // ---- input hitam utk transisi tanpa cover ----
+  if (transOn && !coverOn) {
+    args.push("-f", "lavfi", "-t", tdur.toFixed(2), "-i", "color=c=black:s=1080x1920:r=30");
+    transBlackIdx = idx++;
+  }
+
   const g: string[] = [];
   const bars = barsFilter(s);
   const texts = textFilters(s, partNum, tmpDir, false, job.title);
-  const textsC = coverOn ? textFilters(s, partNum, tmpDir, true, job.title) : "";
-  // v1.3.3: teks otomatis dari suara — filter subtitles (ASS) hanya pada
-  // cabang ISI (bukan cover), sehingga ucapan selalu pas dgn teksnya.
+  const textsC = coverOn && !novacutCover ? textFilters(s, partNum, tmpDir, true, job.title) : "";
   const subFilter = assPath
     ? `,subtitles=filename='${escFilterPath(assPath)}':fontsdir='${escFilterPath(FONTS_DIR)}'`
     : "";
 
   // ---- cabang video utama ----
-  // posisi horizontal ambil gambar: 0 = kiri, 0.5 = tengah, 1 = kanan
+  // v1.3.5: geser bebas 4 arah —
+  //   panX: 0 = kiri, 0.5 = tengah, 1 = kanan (ambil bagian horizontal)
+  //   panY: 0 = atas, 0.5 = tengah, 1 = bawah (ambil bagian vertikal — baru)
   const panX = Math.min(1, Math.max(0, Number.isFinite(s.panX) ? s.panX : 0.5)).toFixed(4);
+  const panY = Math.min(1, Math.max(0, Number.isFinite(s.panY) ? s.panY : 0.5)).toFixed(4);
   if (s.ratio === "full") {
     const WZ = even(1080 * s.zoom);
     const HZ = even(1920 * s.zoom);
     g.push(
       `[0:v]scale=${WZ}:${HZ}:force_original_aspect_ratio=increase:flags=lanczos,` +
-        `crop=1080:1920:x=(in_w-1080)*${panX}:y=(in_h-1920)/2,` +
-        `fps=30,setsar=1${bars}[pv0]`
+        `crop=1080:1920:x=(in_w-1080)*${panX}:y=(in_h-1920)*${panY},` +
+        `fps=30,setsar=1[pv0]`
     );
   } else {
     const WZ = even(1080 * s.zoom);
@@ -326,8 +429,30 @@ async function encodePart(
       `[fgsrc]scale=${WZ}:${HZ}:force_original_aspect_ratio=decrease:flags=lanczos,` +
         `crop=trunc(iw/2)*2:trunc(ih/2)*2[fg]`
     );
-    g.push(`[bg][fg]overlay=(W-w)*${panX}:(H-h)/2[ovl]`);
-    g.push(`[ovl]fps=30,setsar=1${bars}[pv0]`);
+    g.push(`[bg][fg]overlay=(W-w)*${panX}:(H-h)*${panY}[ovl]`);
+    g.push(`[ovl]fps=30,setsar=1[pv0]`);
+  }
+
+  // ---- v1.3.5: rantai efek blockbuster (ala NOVACUT) ----
+  let cur = "pv0";
+  if (fxPlan) {
+    g.push(`[pv0]null[${fxPlan.labelIn}]`);
+    for (const frag of fxPlan.fragments) {
+      g.push(frag.replaceAll("{DUR}", seg.dur.toFixed(3)));
+    }
+    cur = fxPlan.labelOut;
+    for (const kind of fxPlan.overlays) {
+      const i = fxInputs[kind]!;
+      if (kind === "fx-flare") {
+        g.push(`[${i}:v]scale=475:475[flr${i}]`);
+        g.push(
+          `[${cur}][flr${i}]overlay=x='w*(0.25+0.5*mod(t*0.13,1))-237':y='h*0.3-237':shortest=1[${cur}f]`
+        );
+      } else {
+        g.push(`[${cur}][${i}:v]overlay=0:0:shortest=1[${cur}f]`);
+      }
+      cur = `${cur}f`;
+    }
   }
 
   // ---- lapisan frame neon/minimalis lalu teks ----
@@ -335,42 +460,98 @@ async function encodePart(
     // shortest=1 (v1.3.2): input overlay dibuat lebih panjang 1 detik dgn -t,
     // tanpa shortest framesync memperpanjang output sampai overlay habis ->
     // frame terakhir video utama "membeku" 1 detik ekstra di tiap bagian.
-    g.push(`[pv0][${ovMain}:v]overlay=0:0:shortest=1[pv1]`);
-    g.push(`[pv1]null${texts}${subFilter}[pv]`);
+    g.push(`[${cur}][${ovMain}:v]overlay=0:0:shortest=1[${cur}n]`);
+    cur = `${cur}n`;
+  }
+  g.push(`[${cur}]null${texts}${subFilter}[${cur}t]`);
+  cur = `${cur}t`;
+
+  // ---- v1.3.5: kecepatan (setpts) — teks & subtitle ikut rescale ----
+  if (speed !== 1) {
+    g.push(`[${cur}]setpts=PTS/${speed.toFixed(4)}[${cur}s]`);
+    cur = `${cur}s`;
+  }
+  if (transOn) {
+    g.push(`[${cur}]format=yuv420p[pv]`);
   } else {
-    g.push(`[pv0]null${texts}${subFilter}[pv]`);
+    g.push(`[${cur}]null[pv]`);
   }
 
+  // ---- cabang cover ----
+  if (coverOn) {
+    if (novacutCover) {
+      if (coverArt.black) {
+        g.push(`[${blackIdx}:v]fps=30,format=yuv420p,setsar=1[cv0]`);
+      } else {
+        g.push(
+          `[${frameIdx}:v]scale=2160:3840:force_original_aspect_ratio=increase:flags=lanczos,` +
+            `crop=2160:3840,` +
+            `zoompan=z='1+0.12*on/${NF}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${NF}:s=1080x1920:fps=30,` +
+            `setsar=1[cv0]`
+        );
+      }
+      let ccur = "cv0";
+      if (ovArtIdx >= 0) {
+        g.push(`[${ccur}][${ovArtIdx}:v]overlay=0:0:shortest=1[cv1]`);
+        ccur = "cv1";
+      }
+      if (ptIdx >= 0) {
+        g.push(`[${ccur}][${ptIdx}:v]overlay=0:0:shortest=1[cv2]`);
+        ccur = "cv2";
+      }
+      // bingkai cover tampil penuh di atas bar sinema (ala NOVACUT)
+      g.push(`[${ccur}]null${bars}[cvb]`);
+      g.push(`[cvb]format=yuv420p[cv]`);
+    } else {
+      g.push(
+        `[${frameIdx}:v]scale=2160:3840:force_original_aspect_ratio=increase:flags=lanczos,` +
+          `crop=2160:3840,` +
+          `zoompan=z='1+0.12*on/${NF}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${NF}:s=1080x1920:fps=30,` +
+          `setsar=1${bars}[cv0]`
+      );
+      if (frameOn) {
+        // shortest=1: sama seperti cabang utama — cover berhenti persis di coverDuration
+        g.push(`[cv0][${ovCover}:v]overlay=0:0:shortest=1[cv1]`);
+        g.push(`[cv1]null${textsC}[cv]`);
+      } else {
+        g.push(`[cv0]null${textsC}[cv]`);
+      }
+    }
+  }
+
+  // ---- audio ----
+  if (job.info.hasAudio) {
+    let a = `[0:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo`;
+    if (speed !== 1) a += `,${atempoChain(speed)}`;
+    g.push(`${a}[pa]`);
+  } else {
+    g.push(`[${silPart}:a]aformat=sample_fmts=fltp:channel_layouts=stereo[pa]`);
+  }
+
+  // ---- gabung cover + isi (+ transisi) ----
   let maps: string[];
   if (coverOn) {
-    g.push(
-      `[${coverInput}:v]scale=2160:3840:force_original_aspect_ratio=increase:flags=lanczos,` +
-        `crop=2160:3840,` +
-        `zoompan=z='1+0.12*on/${NF}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${NF}:s=1080x1920:fps=30,` +
-        `setsar=1${bars}[cv0]`
-    );
-    if (frameOn) {
-      // shortest=1: sama seperti cabang utama — cover berhenti persis di coverDuration
-      g.push(`[cv0][${ovCover}:v]overlay=0:0:shortest=1[cv1]`);
-      g.push(`[cv1]null${textsC}[cv]`);
-    } else {
-      g.push(`[cv0]null${textsC}[cv]`);
-    }
-    if (job.info.hasAudio) {
-      g.push(`[0:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[pa]`);
-    } else {
-      g.push(`[${silPart}:a]aformat=sample_fmts=fltp:channel_layouts=stereo[pa]`);
-    }
     g.push(`[${silCover}:a]aformat=sample_fmts=fltp:channel_layouts=stereo[sa]`);
-    g.push(`[cv][sa][pv][pa]concat=n=2:v=1:a=1[vout][aout]`);
+    if (transOn) {
+      // v1.3.5: xfade cover -> video (audio tanpa transisi, total durasi sinkron)
+      g.push(
+        `[cv][pv]xfade=transition=${transMeta!.xfade}:duration=${tdur.toFixed(2)}:offset=${(coverDur - tdur).toFixed(2)}[vout]`
+      );
+      g.push(`[sa][pa]concat=n=2:v=0:a=1[aout]`);
+    } else {
+      g.push(`[cv][sa][pv][pa]concat=n=2:v=1:a=1[vout][aout]`);
+    }
+    maps = ["-map", "[vout]", "-map", "[aout]"];
+  } else if (transOn) {
+    g.push(
+      `[${transBlackIdx}:v][pv]xfade=transition=${transMeta!.xfade}:duration=${tdur.toFixed(2)}:offset=0[vout]`
+    );
+    g.push(`[pa]anull[aout]`);
     maps = ["-map", "[vout]", "-map", "[aout]"];
   } else {
-    if (job.info.hasAudio) {
-      g.push(`[0:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[pa]`);
-    } else {
-      g.push(`[${silPart}:a]aformat=sample_fmts=fltp:channel_layouts=stereo[pa]`);
-    }
-    maps = ["-map", "[pv]", "-map", "[pa]"];
+    g.push(`[pv]anull[vout]`);
+    g.push(`[pa]anull[aout]`);
+    maps = ["-map", "[vout]", "-map", "[aout]"];
   }
 
   args.push("-filter_complex", g.join(";"), ...maps);
@@ -389,8 +570,9 @@ async function encodePart(
     outPath
   );
 
-  const expected = (coverOn ? coverDur : 0) + seg.dur;
+  const expected = (coverOn ? coverDur - (transOn ? tdur : 0) : 0) + outPartDur;
   await runFfmpeg(args, expected, onProgress);
+  return expected;
 }
 
 // ============================================================
@@ -528,7 +710,52 @@ export async function runJob(job: Job): Promise<void> {
     }
 
     let sharedFrame: string | null = null;
-    if (s.coverEnabled && s.coverSame) {
+    // v1.3.5: cover ala NOVACUT — tulis PNG overlay + gambar manual dari dataURL
+    const coverArt: CoverArt = {};
+    if (s.coverEnabled && s.coverTemplate !== "legacy") {
+      if (job.coverOverlay) {
+        try {
+          const ovPath = path.join(tmpDir, "cover_ov.png");
+          await writeDataUrl(job.coverOverlay, ovPath);
+          coverArt.ov = ovPath;
+        } catch {
+          /* overlay gagal ditulis — jatuh ke cover klasik */
+        }
+      }
+      if (coverArt.ov && Array.isArray(job.coverParts) && job.coverParts.length > 0) {
+        const pts = job.coverParts;
+        for (let i = 0; i < pts.length; i++) {
+          if (!pts[i]) continue;
+          try {
+            await writeDataUrl(pts[i], path.join(tmpDir, `cover_pt_${i + 1}.png`));
+          } catch {
+            /* teks PART opsional */
+          }
+        }
+        coverArt.ptFor = (n: number) =>
+          pts[n - 1] ? path.join(tmpDir, `cover_pt_${n}.png`) : null;
+      }
+      if (s.coverMode === "manual" && s.coverImage) {
+        const ext = s.coverImage.startsWith("data:image/png")
+          ? "png"
+          : s.coverImage.startsWith("data:image/webp")
+            ? "webp"
+            : "jpg";
+        try {
+          const p = path.join(tmpDir, `cover_manual.${ext}`);
+          await writeDataUrl(s.coverImage, p);
+          coverArt.manualPath = p;
+        } catch {
+          /* gambar manual gagal — jatuh ke frame video */
+        }
+      }
+      if (s.coverMode === "auto" && s.coverBg === "hitam" && !coverArt.manualPath) {
+        coverArt.black = true;
+      }
+    }
+    // frame video hanya diambil bila cover pakai adegan video
+    const needFrame = s.coverEnabled && !coverArt.manualPath && !coverArt.black;
+    if (needFrame && s.coverSame) {
       const t = Math.min(1, job.info.duration * 0.08);
       sharedFrame = path.join(tmpDir, "frame_same.png");
       job.phase = "Mengambil frame cover bersama...";
@@ -541,7 +768,7 @@ export async function runJob(job: Job): Promise<void> {
       job.phase = `Bagian ${n}/${segs.length}: merender`;
 
       let framePath: string | null = null;
-      if (s.coverEnabled) {
+      if (needFrame) {
         if (s.coverSame && sharedFrame) {
           framePath = sharedFrame;
         } else {
@@ -568,7 +795,7 @@ export async function runJob(job: Job): Promise<void> {
 
       const outFile = `${sanitizeFile(job.title)}-${word}-${n}.mp4`;
       const outPath = path.join(outDir, outFile);
-      await encodePart(
+      const outDur = await encodePart(
         job,
         seg,
         n,
@@ -578,7 +805,8 @@ export async function runJob(job: Job): Promise<void> {
         (frac) => {
           job.progress = progBase + progSpan * ((i + frac) / segs.length);
         },
-        assPath
+        assPath,
+        coverArt
       );
 
       // thumbnail dari tengah cover (menampilkan tampilan akhir)
@@ -599,7 +827,8 @@ export async function runJob(job: Job): Promise<void> {
         file: outFile,
         thumb: thumbName,
         size: st.size,
-        duration: (s.coverEnabled ? s.coverDuration : 0) + seg.dur,
+        // v1.3.5: durasi nyata (transisi memotong overlap; speed & ulang mengubah isi)
+        duration: outDur,
       });
       job.progress = progBase + progSpan * ((i + 1) / segs.length);
       void q;

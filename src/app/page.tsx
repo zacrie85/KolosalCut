@@ -18,6 +18,7 @@ import {
   titleFromFilename,
 } from "@/lib/video-config";
 import type { JobPublic } from "@/lib/server/jobs";
+import { generateCoverPayload, isNovacutCover } from "@/lib/cover-render";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -390,6 +391,26 @@ export default function Home() {
     try {
       for (const it of ready) {
         try {
+          // v1.3.5: render PNG cover ala NOVACUT (overlay + teks per bagian)
+          // sebelum job dikirim — gagal bikin PNG jatuh ke cover klasik.
+          let coverOverlay: string | undefined;
+          let coverParts: string[] | undefined;
+          if (isNovacutCover(it.settings)) {
+            const jobSegs = it.info ? computeSegments(it.info.duration, it.settings) : [];
+            if (jobSegs.length > 0) {
+              try {
+                const payload = await generateCoverPayload(
+                  it.settings,
+                  it.settings.title.text.trim() || it.info?.title || titleFromFilename(it.name),
+                  jobSegs.length
+                );
+                coverOverlay = payload.coverOverlay;
+                coverParts = payload.coverParts;
+              } catch {
+                /* canvas gagal (mis. tab latar) — lanjut tanpa overlay */
+              }
+            }
+          }
           const res = await fetch("/api/process", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -403,6 +424,8 @@ export default function Home() {
               hasAudio: it.info?.hasAudio,
               settings: it.settings,
               parallel: settingsRef.current.parallel,
+              coverOverlay,
+              coverParts,
             }),
           });
           const data = await res.json();
@@ -697,6 +720,10 @@ export default function Home() {
                 settings={settings}
                 onChange={onSettingsChange}
                 hasVideo={items.length > 0}
+                videoWidth={selected?.info?.width}
+                videoHeight={selected?.info?.height}
+                videoUrl={selected?.objectUrl ?? null}
+                videoDuration={selected?.info?.duration ?? 0}
               />
             </div>
 

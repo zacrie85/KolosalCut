@@ -32,6 +32,10 @@ export interface Job {
   createdAt: number;
   /** folder akhir tempat file MP4 hasil disimpan (null = folder bawaan aplikasi) */
   outDir?: string | null;
+  /** v1.3.5: PNG overlay cover ala NOVACUT (dataURL) — dipakai semua bagian */
+  coverOverlay?: string | null;
+  /** v1.3.5: PNG teks PART per bagian (dataURL, urut bagian 1..N) */
+  coverParts?: string[];
 }
 
 export interface JobPublic {
