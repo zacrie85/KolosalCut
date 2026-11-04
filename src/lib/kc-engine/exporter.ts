@@ -82,10 +82,10 @@ function kcOffXFor(f: number): number {
 function kcPartLabel(style: string, index: number, total: number, withTotal: boolean): string {
   const tpl = useEditor.getState().kcLabelTpl?.trim();
   if (tpl) {
-    return tpl
-      .replaceAll("{n}", String(index))
-      .replaceAll("{total}", String(total))
-      .toUpperCase();
+    // v1.4.2: huruf TIDAK lagi dipaksa KAPITAL — baris gabung gaya cover
+    // NOVACUT ("Short Drama Movies Series · Episode 2/30") harus tampil
+    // apa adanya seperti ketikan pengguna.
+    return tpl.replaceAll("{n}", String(index)).replaceAll("{total}", String(total));
   }
   return partLabel(style, index, total, withTotal);
 }
@@ -1393,7 +1393,8 @@ export async function runBatchExport(assetIds: string[]) {
     const runTurboQueue = async (): Promise<number> => {
       const RAM_BUDGET_MB = 1500;
       // v1.4.0 KolosalCut: jumlah pekerja mengikuti setelan PARALEL pengguna (1-7, dibatasi 5)
-      const MAX_CONC = Math.max(1, Math.min(5, Math.round(Number(useEditor.getState().playlistExport.parallel) || 2)));
+      // v1.4.2: batas pekerja naik 5 -> 7 (antrean berbasis anggaran RAM tetap menjaga memori)
+      const MAX_CONC = Math.max(1, Math.min(7, Math.round(Number(useEditor.getState().playlistExport.parallel) || 2)));
       const PREP_CONC = Math.min(2, Math.max(1, jobs.length));
       let prepNext = 0;
       let prepRunning = 0;

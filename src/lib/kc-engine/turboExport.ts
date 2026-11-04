@@ -16,7 +16,7 @@
 // 2 jam berukuran beberapa GB TIDAK PERNAH dimuat utuh ke memori.
 
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target, StreamTarget as Mp4StreamTarget } from "mp4-muxer";
-import { AudioDecodeCache, DISK_CHUNK, DiskWriteChain, encodeAudioRange, fastSupported } from "./fastExport";
+import { AudioDecodeCache, DISK_CHUNK, DiskWriteChain, encodeAudioRange, ensureImagesReady, fastSupported } from "./fastExport";
 import { engine, type ComposeWork, type RenderState } from "./engine";
 import { ensureAppFonts } from "./fonts";
 import { DiskFileWriter } from "./fsBridge";
@@ -120,11 +120,20 @@ async function* decodeVideoRange(
       err = e instanceof Error ? e : new Error(String(e));
     },
   });
-  dec.configure({
+  // v1.4.2: utamakan DECODER hardware (GPU) — TAPI hanya bila benar-benar
+  // didukung (dicek isConfigSupported dulu); tanpa GPU konfigurasi dibiarkan
+  // netral agar decoder tidak gagal-closed seperti saat pertama dicoba.
+  const decBase: VideoDecoderConfig = {
     codec: tr.codec,
     description: tr.description as unknown as BufferSource,
     optimizeForLatency: false,
-  });
+  };
+  try {
+    const sup = await VideoDecoder.isConfigSupported({ ...decBase, hardwareAcceleration: "prefer-hardware" });
+    dec.configure(sup.supported ? { ...decBase, hardwareAcceleration: "prefer-hardware" } : decBase);
+  } catch {
+    dec.configure(decBase);
+  }
   const cleanup = () => {
     try {
       if (dec.state !== "closed") dec.close();
@@ -414,6 +423,11 @@ export async function exportSegmentTurbo(opts: TurboSegmentOptions): Promise<Tur
 
   // ==== video: decode murni + compose + encode ====
   opts.onStage?.("Merender video (mesin Turbo)...");
+  // v1.4.2 — ANTI KEDIP: tunggu SEMUA gambar klip (cover/deskripsi dsb.) selesai
+  // dimuat-decode SEBELUM frame pertama di-encode. Dulu cover yang belum selesai
+  // dimuat membuat 0,3-0,5 detik pertama TIAP bagian HITAM (= berkedip saat
+  // hasil diputar, terasa jelas di tiap bagian split).
+  await ensureImagesReady(0, rs);
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -436,6 +450,8 @@ export async function exportSegmentTurbo(opts: TurboSegmentOptions): Promise<Tur
     height: h,
     bitrate: opts.bitrate,
     framerate: fps,
+    // v1.4.2: pakai persis preferensi yang TERBUKTI oleh probe (GPU bila ada)
+    ...(support.hw ? { hardwareAcceleration: support.hw } : {}),
     ...(support.videoMuxCodec === "avc" ? { avc: { format: "avc" as const } } : {}),
   });
 
@@ -489,6 +505,9 @@ export async function exportSegmentTurbo(opts: TurboSegmentOptions): Promise<Tur
     for (let f = 0; f < totalFrames; f++) {
       if (pullErr) throw pullErr; // decode gagal → gagal bersih → fallback mesin kilat
       const t = f / fps;
+      // v1.4.2: cek gambar klip tiap setengah detik (murah — hanya bila ada
+      // gambar belum selesai) — sama seperti mesin kilat
+      if (f % (fps >> 1) === 0) await ensureImagesReady(t, rs);
       let frame: VideoFrame | null = null;
       if (t >= clip.start - 1e-4 && t < clip.start + clip.duration) {
         const srcT = srcTimeOf(clip, t);

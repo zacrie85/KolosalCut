@@ -99,7 +99,16 @@ export type FontKey =
   | "montserrat"
   | "playfair"
   | "cinzel"
-  | "archivo";
+  | "archivo"
+  // v1.4.2 — 8 font baru ala NOVACUT (semua TTF sudah dibundel di public/fonts)
+  | "teko"
+  | "russo"
+  | "orbitron"
+  | "rajdhani"
+  | "barlow"
+  | "michroma"
+  | "righteous"
+  | "alfaslab";
 
 export interface FontOption {
   key: FontKey;
@@ -121,6 +130,15 @@ export const FONT_OPTIONS: FontOption[] = [
   { key: "cinzel", name: "Cinzel (Hollywood Retro)", file: "cinzel.ttf", weight: 700, css: "KC Cinzel" },
   { key: "archivo", name: "Archivo Black (Kolosal Kokoh)", file: "archivo-black.ttf", weight: 400, css: "KC Archivo" },
   { key: "carlito", name: "Carlito (Standar)", file: "carlito.ttf", weight: 700, css: "KC Carlito" },
+  // v1.4.2 — 8 font baru ala NOVACUT
+  { key: "teko", name: "Teko (Judul Drama Padat)", file: "Teko-700.ttf", weight: 700, css: "KC Teko" },
+  { key: "barlow", name: "Barlow Condensed (Subtitle Film)", file: "BarlowCondensed-600.ttf", weight: 600, css: "KC Barlow" },
+  { key: "rajdhani", name: "Rajdhani (Tech Series)", file: "Rajdhani-700.ttf", weight: 700, css: "KC Rajdhani" },
+  { key: "russo", name: "Russo One (Aksi)", file: "RussoOne-Regular.ttf", weight: 400, css: "KC Russo" },
+  { key: "orbitron", name: "Orbitron (Futuristik)", file: "Orbitron-900.ttf", weight: 900, css: "KC Orbitron" },
+  { key: "michroma", name: "Michroma (Sci-Fi)", file: "Michroma-Regular.ttf", weight: 400, css: "KC Michroma" },
+  { key: "righteous", name: "Righteous (Retro Populer)", file: "Righteous-Regular.ttf", weight: 400, css: "KC Righteous" },
+  { key: "alfaslab", name: "Alfa Slab One (Slab Tebal)", file: "AlfaSlabOne-Regular.ttf", weight: 400, css: "KC AlfaSlab" },
 ];
 
 export function getFont(k: FontKey): FontOption {
@@ -309,6 +327,10 @@ export interface Settings {
   frame: FrameStyleKey;
   bars: boolean;
   barSize: BarSize;
+  /** v1.4.2 — GAYA COVER NOVACUT: judul di atas, deskripsi + part/episode
+   * SEBARIS (dipisah "·") tepat di bawah judul — persis cover referensi
+   * "SHORT DRAMA MOVIES SERIES · Episode 2/30" */
+  coverTextNovacut: boolean;
   ratio: RatioMode;
   /** perbesaran video 1 (normal) – 5 — v1.3.5: naik dari 2.5 agar video sinema bisa di-isi-frame penuh */
   zoom: number;
@@ -387,6 +409,8 @@ export const DEFAULT_SETTINGS: Settings = {
   frame: "neon-emas",
   bars: true,
   barSize: "sedang",
+  // v1.4.2: gaya cover NOVACUT aktif bawaan — judul atas + deskripsi·episode sebaris
+  coverTextNovacut: true,
   ratio: "full",
   zoom: 1,
   panX: 0.5,
@@ -569,6 +593,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     desc: pickText(r.desc, d.desc),
     frame,
     bars: typeof r.bars === "boolean" ? r.bars : d.bars,
+    // v1.4.2: gaya cover NOVACUT (judul atas + deskripsi·episode sebaris)
+    coverTextNovacut: typeof r.coverTextNovacut === "boolean" ? r.coverTextNovacut : d.coverTextNovacut,
     barSize: (["kecil", "sedang", "besar"] as BarSize[]).includes(r.barSize as BarSize)
       ? (r.barSize as BarSize)
       : d.barSize,

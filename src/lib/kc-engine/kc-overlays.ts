@@ -114,9 +114,12 @@ export function drawKcOverlay(
   if (!staticLoading.has(cfg.key)) void loadStatic(cfg.key);
 }
 
-/** pemanasan cache overlay (panggil saat batch mulai) */
-export function preloadKcOverlay(cfg: KcFrameCfg | undefined): void {
-  if (!cfg || !cfg.key || cfg.key === "none") return;
-  if (cfg.key.startsWith("neon-")) void loadAnim(cfg.key);
-  else void loadStatic(cfg.key);
+/** pemanasan cache overlay (panggil saat batch mulai).
+ * v1.4.2: mengembalikan Promise — PEMANGGIL DISARANKAN MENUNGGU (await)
+ * agar frame render pertama sudah pasti memakai overlay lengkap
+ * (dulu fire-and-forget → frame awal tanpa neon = tampilan berkedip). */
+export function preloadKcOverlay(cfg: KcFrameCfg | undefined): Promise<void> {
+  if (!cfg || !cfg.key || cfg.key === "none") return Promise.resolve();
+  if (cfg.key.startsWith("neon-")) return loadAnim(cfg.key).then(() => undefined);
+  return loadStatic(cfg.key).then(() => undefined);
 }

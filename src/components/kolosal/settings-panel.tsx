@@ -995,6 +995,34 @@ export function SettingsPanel({
           <span className="text-[11px] text-zinc-500 tabular-nums w-7">{s.desc.size}px</span>
         </div>
       </Section>
+
+      {/* ===== GAYA COVER NOVACUT (v1.4.2) ===== */}
+      <Section num="04" icon={<Sparkles className="w-4 h-4" />} title="Gaya Cover NOVACUT (Judul Atas · Episode Sebaris)">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="ctn-on" className="text-xs text-zinc-300">
+            Aktifkan tata letak ala NOVACUT
+          </Label>
+          <Switch
+            id="ctn-on"
+            checked={s.coverTextNovacut}
+            disabled={disabled}
+            onCheckedChange={(v) => onChange({ coverTextNovacut: v })}
+          />
+        </div>
+        <div className="rounded-lg border border-cyan-300/15 bg-cyan-400/5 px-3 py-2">
+          <p className="text-[10px] font-tech tracking-[0.14em] text-cyan-300/80 uppercase mb-1">Contoh hasil</p>
+          <p className="text-[11px] text-zinc-200 leading-snug">
+            <span className="font-semibold">Ahli Sihir Terkuat</span>
+            <br />
+            <span className="text-zinc-400">Pemuda sombong satu serangan! · Episode 2/30</span>
+          </p>
+        </div>
+        <p className="text-[11px] text-zinc-500 leading-snug">
+          Judul tampil di ATAS, lalu deskripsi + Part/Episode jadi SATU baris bersebelahan
+          (dipisah &quot;·&quot;) tepat di bawah judul — sama seperti cover di NOVACUT.
+          Matikan untuk mengatur posisi tiap teks secara bebas seperti biasa.
+        </p>
+      </Section>
       </>
       )}
 

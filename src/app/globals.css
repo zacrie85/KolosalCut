@@ -389,3 +389,52 @@
   font-weight: 700;
   font-display: swap;
 }
+/* v1.4.2 — 8 font baru ala NOVACUT (TTF dibundel di public/fonts) */
+@font-face {
+  font-family: "KC Teko";
+  src: url("/fonts/Teko-700.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Barlow";
+  src: url("/fonts/BarlowCondensed-600.ttf") format("truetype");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Rajdhani";
+  src: url("/fonts/Rajdhani-700.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Russo";
+  src: url("/fonts/RussoOne-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Orbitron";
+  src: url("/fonts/Orbitron-900.ttf") format("truetype");
+  font-weight: 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Michroma";
+  src: url("/fonts/Michroma-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC Righteous";
+  src: url("/fonts/Righteous-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KC AlfaSlab";
+  src: url("/fonts/AlfaSlabOne-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}

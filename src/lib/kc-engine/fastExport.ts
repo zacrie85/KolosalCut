@@ -35,6 +35,9 @@ export interface FastSupport {
   /** 'mp4' atau 'webm' */
   container: "mp4" | "webm";
   ext: ".mp4" | ".webm";
+  /** v1.4.2: preferensi hardware yang TERBUKTI didukung probe — dipakai saat
+   * configure agar konfigurasi encoder = hasil probe (bukan tebakan) */
+  hw?: VideoEncoderConfig["hardwareAcceleration"];
 }
 
 let supportCache: Promise<FastSupport | null> | null = null;
@@ -48,25 +51,48 @@ export function fastSupported(): Promise<FastSupport | null> {
 async function probe(): Promise<FastSupport | null> {
   try {
     if (typeof VideoEncoder === "undefined" || typeof VideoFrame === "undefined") return null;
-    const w = 1280;
-    const h = 720;
+    // v1.4.2 — PROBE DI RESOLUSI ASLI + UTAMAKAN GPU:
+    // Dulu probe di 1280x720 dgn kandidat pertama "avc1.42E01E" (Baseline L3.1
+    // — batas resmi 720p). Saat encode 1080x1920 (2,25x batas level), encoder
+    // hardware Windows sering MENOLAK konfigurasi lalu Chromium jatuh ke
+    // OpenH264 SOFTWARE → inilah sebab render bisa jauh lebih lambat dari
+    // seharusnya. Kini: probe tepat 1080x1920@30, urutan profil High→Main→
+    // Baseline L4.0 (semua sah utk 1080x1920), dua putaran — prefer-hardware
+    // dulu (GPU), lalu tanpa preferensi (software) sebagai jaring aman.
+    const w = 1080;
+    const h = 1920;
     const vCandidates: { codec: string; mux: "avc" | "vp9" }[] = [
-      { codec: "avc1.42E01E", mux: "avc" },
-      { codec: "avc1.4D0028", mux: "avc" },
-      { codec: "avc1.640028", mux: "avc" },
+      { codec: "avc1.640028", mux: "avc" }, // High Profile Level 4.0 — kualitas terbaik per bit, didukung hampir semua GPU
+      { codec: "avc1.4D0028", mux: "avc" }, // Main Profile Level 4.0
+      { codec: "avc1.42E028", mux: "avc" }, // Baseline Level 4.0 (OpenH264 software juga sanggup)
+      { codec: "avc1.42E01E", mux: "avc" }, // Baseline Level 3.1 (warisan)
       { codec: "vp09.00.10.08", mux: "vp9" },
     ];
     let video: { codec: string; mux: "avc" | "vp9" } | null = null;
-    for (const c of vCandidates) {
-      try {
-        const s = await VideoEncoder.isConfigSupported({ codec: c.codec, width: w, height: h, bitrate: 8_000_000, framerate: 30 });
-        if (s.supported) {
-          video = c;
-          break;
+    let hwUsed: VideoEncoderConfig["hardwareAcceleration"] | undefined;
+    const passes: (VideoEncoderConfig["hardwareAcceleration"] | undefined)[] = ["prefer-hardware", undefined];
+    for (const ha of passes) {
+      for (const c of vCandidates) {
+        try {
+          const cfg: VideoEncoderConfig = {
+            codec: c.codec,
+            width: w,
+            height: h,
+            bitrate: 9_000_000,
+            framerate: 30,
+            ...(ha ? { hardwareAcceleration: ha } : {}),
+          };
+          const s = await VideoEncoder.isConfigSupported(cfg);
+          if (s.supported) {
+            video = c;
+            hwUsed = ha;
+            break;
+          }
+        } catch {
+          /* coba kandidat berikutnya */
         }
-      } catch {
-        /* coba kandidat berikutnya */
       }
+      if (video) break;
     }
     if (!video) return null;
 
@@ -85,10 +111,10 @@ async function probe(): Promise<FastSupport | null> {
       }
     }
     if (video.mux === "avc") {
-      return { videoCodec: video.codec, videoMuxCodec: "avc", audioCodec, container: "mp4", ext: ".mp4" };
+      return { videoCodec: video.codec, videoMuxCodec: "avc", audioCodec, container: "mp4", ext: ".mp4", hw: hwUsed };
     }
     // video VP9: masih bisa MP4, tapi WebM lebih aman untuk pemutar lama
-    return { videoCodec: video.codec, videoMuxCodec: "vp9", audioCodec: audioCodec === "mp4a.40.2" ? "opus" : audioCodec, container: "webm", ext: ".webm" };
+    return { videoCodec: video.codec, videoMuxCodec: "vp9", audioCodec: audioCodec === "mp4a.40.2" ? "opus" : audioCodec, container: "webm", ext: ".webm", hw: hwUsed };
   } catch {
     return null;
   }
@@ -651,7 +677,7 @@ function activeVideoClips(t: number, rs: RenderState): Clip[] {
 }
 
 /** tunggu kanvas siap (elemen gambar lengkap) */
-async function ensureImagesReady(t: number, rs: RenderState): Promise<void> {
+export async function ensureImagesReady(t: number, rs: RenderState): Promise<void> {
   for (let round = 0; round < 24; round++) {
     let pending = false;
     for (const clip of rs.clips) {
@@ -771,6 +797,8 @@ export async function exportRangeFast(opts: FastExportOptions): Promise<FastExpo
     height: h,
     bitrate: opts.bitrate ?? 9_000_000,
     framerate: fps,
+    // v1.4.2: pakai persis preferensi yang TERBUKTI oleh probe (GPU bila ada)
+    ...(support.hw ? { hardwareAcceleration: support.hw } : {}),
     ...(support.videoMuxCodec === "avc" ? { avc: { format: "avc" as const } } : {}),
   });
 

@@ -72,10 +72,43 @@ const FONT_MAP: Record<string, string> = {
   cinzel: "cinzel",
   archivo: "archivo",
   carlito: "sans",
+  // v1.4.2 — 8 font baru ala NOVACUT → alias TEXT_FONTS mesin
+  teko: "teko",
+  barlow: "barlow",
+  rajdhani: "sans",
+  russo: "russo",
+  orbitron: "display",
+  michroma: "michroma",
+  righteous: "righteous",
+  alfaslab: "alfaslab",
 };
 
 function kcFont(k: string): string {
   return FONT_MAP[k] || "condensed";
+}
+
+/**
+ * v1.4.2 — BARIS GABUNG gaya cover NOVACUT:
+ *   "<deskripsi> · <Part/Episode> {n}/{total}"
+ * persis referensi "SHORT DRAMA MOVIES SERIES · Episode 2/30".
+ * Bila deskripsi kosong → "Episode {n}/{total}" saja. Huruf dipertahankan
+ * apa adanya (tidak dipaksa KAPITAL) agar gaya bebas seperti di NOVACUT.
+ */
+function mergedCoverLine(s: Settings, labelStyle: string): string {
+  const word =
+    s.label.format === "custom"
+      ? ""
+      : s.label.format === "episode"
+        ? "Episode"
+        : s.label.format === "bagian"
+          ? "Bagian"
+          : s.label.format === "eps"
+            ? "Eps"
+            : "Part";
+  void labelStyle;
+  const num = `${word ? word + " " : ""}{n}/{total}`;
+  const desc = s.desc.enabled ? s.desc.text.trim() : "";
+  return desc ? `${desc} · ${num}` : num;
 }
 
 /** bitrate sesuai kualitas KolosalCut: ringan 4,5 Mbps / tajam 9 / maksimal 14 */
@@ -148,7 +181,9 @@ export async function startKcBatch(
   useEditor.setState({
     texts: {
       title: s.title.text || "",
-      description: s.desc.enabled ? s.desc.text : "",
+      // v1.4.2: di gaya NOVACUT deskripsi ikut BARIS GABUNG label — kosongkan
+      // di sini agar baris sub cover tidak menjadi "desc · desc · Episode n"
+      description: s.coverTextNovacut ? "" : s.desc.enabled ? s.desc.text : "",
       labelStyle,
       parts: Math.max(1, s.splitParts),
       // ukuran huruf: KolosalCut memakai px pada kanvas 1080x1920 → fraksi tinggi
@@ -164,12 +199,23 @@ export async function startKcBatch(
       partX: Math.round((s.label.relX - 0.5) * 100),
       partY: Math.round(Math.max(-45, Math.min(45, (s.label.relY + 0.03 - 0.86) * 100))),
     },
-    // deskripsi sebagai teks TERPISAH milik KolosalCut (posisi sendiri)
-    kcDesc: s.desc.enabled && s.desc.text
-      ? { text: s.desc.text, size: s.desc.size, relX: s.desc.relX, relY: s.desc.relY, font: kcFont(s.desc.font) }
-      : null,
-    kcLabelTpl: s.label.format === "custom" ? s.label.prefix || "" : "",
-    // teks otomatis: ukuran fraksi + posisi + latar
+    // v1.4.2 — GAYA COVER NOVACUT: judul di ATAS, deskripsi + part/episode
+    // SEBARIS ("deskripsi · Episode n/total") tepat di bawah judul — persis
+    // cover referensi "SHORT DRAMA MOVIES SERIES · Episode 2/30". Baris gabung
+    // dibawa oleh template label kustom ({n}/{total} diganti mesin) sehingga
+    // muncul di sub cover MAUPUN label isi video; elemen deskripsi terpisah
+    // dimatikan agar tidak dobel.
+    ...(s.coverTextNovacut
+      ? {
+          kcLabelTpl: mergedCoverLine(s, labelStyle),
+          kcDesc: null,
+        }
+      : {
+          kcLabelTpl: s.label.format === "custom" ? s.label.prefix || "" : "",
+          kcDesc: s.desc.enabled && s.desc.text
+            ? { text: s.desc.text, size: s.desc.size, relX: s.desc.relX, relY: s.desc.relY, font: kcFont(s.desc.font) }
+            : null,
+        }),
     kcSub: {
       size: s.subtitle.style === "klasik" ? 0.028 : 0.036,
       posY: s.subtitle.posY,
@@ -217,7 +263,10 @@ export async function startKcBatch(
     playlistExport: {
       autoTitle: !s.title.text.trim(), // judul kosong → dari nama video
       titleCustom: s.title.text.trim(),
-      description: s.desc.enabled ? s.desc.text : "",
+      // v1.4.2: di gaya cover NOVACUT deskripsi sudah MENEMPAT DIRI di baris
+      // gabung label ("desc · Episode n/total") — kosongkan di sini agar baris
+      // sub cover tidak menjadi "desc · desc · Episode n" (dobel).
+      description: s.coverTextNovacut ? "" : s.desc.enabled ? s.desc.text : "",
       labelStyle,
       showTitleScreen: s.coverEnabled,
       showPartText: s.label.enabled,
@@ -240,7 +289,7 @@ export async function startKcBatch(
       },
       autoSub: s.subtitle.enabled,
       subLevel: subLevelFor(s.subtitle.mode),
-      parallel: Math.max(1, Math.min(5, Number(s.parallel) || 2)),
+      parallel: Math.max(1, Math.min(7, Number(s.parallel) || 2)),
       quality: bitrateFor(s.quality) >= 14_000_000 ? "maksimal" : bitrateFor(s.quality) <= 4_500_000 ? "ringan" : "tajam",
       smartSplit: false,
       skipExisting: true,
@@ -255,7 +304,10 @@ export async function startKcBatch(
     kcDisableTurbo: s.engine === "penuh",
     kcCancel: { all: false, ids: [], stamp: Date.now() },
   });
-  preloadKcOverlay(useEditor.getState().kcFrame);
+  // v1.4.2: TUNGGU overlay siap — dulu hanya "dipanaskan" tanpa menunggu,
+  // frame-frame awal render bisa tanpa neon lalu neon muncul mendadak
+  // (= salah satu penyebab tampilan berkedip).
+  await preloadKcOverlay(useEditor.getState().kcFrame);
 
   // ---- status batch awal ----
   useEditor.setState({
