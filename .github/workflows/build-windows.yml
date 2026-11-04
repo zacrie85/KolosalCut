@@ -16,6 +16,9 @@ jobs:
       - name: Checkout kode
         uses: actions/checkout@v4
 
+      - name: Gerbang sintaks electron (anti crash saat dibuka — bug v1.4.0 'fs already declared')
+        run: node --check electron/main.js && node --check electron/preload.js
+
       - name: Pasang Node.js 22 (dengan cache npm)
         uses: actions/setup-node@v4
         with:

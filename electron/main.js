@@ -298,8 +298,11 @@ ipcMain.handle("kolosal:open-path", async (_event, target) => {
 // (stream chunk via fs:save-begin/chunk/end — file ratusan MB tak
 // pernah menumpuk di memori) + stat file + notifikasi + shutdown.
 // Semantik sama dengan fsBridge.ts di sisi renderer.
+// CATATAN v1.4.1: `fs` & `Notification` TIDAK dideklarasi ulang di
+// sini — `fs` sudah ada di atas (baris ~20) dan mendeklarasi ulang
+// const di scope modul yang sama melempar SyntaxError yang
+// membunuh seluruh main process saat aplikasi dibuka.
 // ============================================================
-const fs = require("fs");
 const { Notification } = require("electron");
 
 function safeFileName(name) {
