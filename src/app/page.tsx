@@ -11,6 +11,7 @@ import { ResultPanel } from "@/components/kolosal/result-panel";
 import { Timeline } from "@/components/kolosal/timeline";
 import {
   DEFAULT_SETTINGS,
+  PARALLEL_OPTIONS,
   Settings,
   TextElement,
   computeSegments,
@@ -115,6 +116,25 @@ export default function Home() {
       if (saved) setSettings((s) => ({ ...s, outputDir: saved }));
     } catch {
       /* penyimpanan lokal tidak tersedia — abaikan */
+    }
+  }, []);
+  // v1.3.6: muat hasil tombol OPTIMALKAN dari sesi sebelumnya (paralel & kualitas)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("kolosalcut.tuned");
+      if (!raw) return;
+      const t = JSON.parse(raw) as { quality?: string; parallel?: number };
+      setSettings((s) => ({
+        ...s,
+        ...(t.quality === "fast" || t.quality === "balanced" || t.quality === "high"
+          ? { quality: t.quality as Settings["quality"] }
+          : {}),
+        ...(PARALLEL_OPTIONS.includes(Number(t.parallel) as Settings["parallel"])
+          ? { parallel: Number(t.parallel) as Settings["parallel"] }
+          : {}),
+      }));
+    } catch {
+      /* data tidak valid — abaikan */
     }
   }, []);
   useEffect(() => {

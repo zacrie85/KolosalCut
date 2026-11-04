@@ -647,16 +647,27 @@ async function encodePart(
     g.push(`[pa]anull[aout]`);
     maps = ["-map", "[vout]", "-map", "[aout]"];
   } else {
-    g.push(`[pv]anull[vout]`);
+    // v1.3.6 fix: video wajib lewat `null` (bukan `anull` — itu filter AUDIO).
+    // Salah tipe ini membuat ffmpeg 7.x gagal "Error linking filters" pada
+    // render polos tanpa cover & tanpa transisi.
+    g.push(`[pv]null[vout]`);
     g.push(`[pa]anull[aout]`);
     maps = ["-map", "[vout]", "-map", "[aout]"];
   }
 
   args.push("-filter_complex", g.join(";"), ...maps);
+  // v1.3.6 — batasi thread encoder = core dibagi rata antar video paralel.
+  // Tanpa ini tiap ffmpeg merebut SELURUH core sehingga render paralel saling
+  // berebut (semua lambat bersamaan & PC terasa hang).
+  const threads = Math.max(
+    1,
+    Math.min(32, Math.floor(os.cpus().length / Math.max(1, Math.round(Number(s.parallel)) || 1)))
+  );
   args.push(
     "-c:v", "libx264",
     "-preset", q.preset,
     "-crf", String(q.crf),
+    "-threads", String(threads),
     "-pix_fmt", "yuv420p",
     "-r", "30",
     "-c:a", "aac",
