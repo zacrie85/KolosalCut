@@ -12,7 +12,6 @@
 // ============================================================
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { JobPublic } from "@/lib/server/jobs";
 import {
   Settings,
   SplitMode,
@@ -93,8 +92,10 @@ export interface ExportItem {
   name: string;
   status: string;
   uploadId?: string;
-  jobId?: string;
-  job?: JobPublic | null;
+  /** progres render mesin NOVACUT (0..1) */
+  kcProgress?: number;
+  /** keterangan fase render */
+  kcPhase?: string;
   info?: { duration: number } | null;
   settings: Settings;
 }
@@ -147,7 +148,7 @@ export function ExportPanel({
   };
 
   // ---- estimasi hasil (ala NOVACUT: "12:34 → ±5 video hasil") ----
-  const ready = items.filter((i) => i.uploadId !== undefined && !i.jobId && i.status === "siap");
+  const ready = items.filter((i) => i.uploadId !== undefined && i.status === "siap");
   const estFiles = ready.reduce(
     (m, it) => m + (it.info ? computeSegments(it.info.duration, it.settings).length : 0),
     0
@@ -158,7 +159,7 @@ export function ExportPanel({
   const activeRows = items.filter((i) => i.status === "antre" || i.status === "proses");
   const overall =
     activeRows.length > 0
-      ? activeRows.reduce((m, r) => m + (r.job?.progress ?? 0), 0) / activeRows.length
+      ? activeRows.reduce((m, r) => m + (r.kcProgress ?? 0), 0) / activeRows.length
       : 0;
 
   // ---- estimasi waktu tersisa (dari laju progres 20 detik terakhir) ----
@@ -576,20 +577,20 @@ export function ExportPanel({
                     {r.name}
                   </span>
                   <span className="font-tech text-[9px] text-cyan-100/60 truncate max-w-[130px] text-right">
-                    {r.job?.phase ?? "MENUNGGU..."}
+                    {r.kcPhase ?? "MENUNGGU..."}
                   </span>
                   <button
                     type="button"
                     aria-label={`Batalkan ${r.name}`}
                     title="Batalkan video ini"
                     className="shrink-0 rounded p-1 text-zinc-500 hover:text-red-300 hover:bg-red-500/10"
-                    onClick={() => r.jobId && onCancelJob(r.jobId)}
+                    onClick={() => r.uid && onCancelJob(r.uid)}
                   >
                     <X className="w-3.5 h-3.5" aria-hidden />
                   </button>
                 </div>
                 <Progress
-                  value={Math.max(2, Math.round((r.job?.progress ?? 0) * 100))}
+                  value={Math.max(2, Math.round((r.kcProgress ?? 0) * 100))}
                   className="h-1 ml-6"
                 />
               </div>

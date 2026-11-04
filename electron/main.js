@@ -293,6 +293,160 @@ ipcMain.handle("kolosal:open-path", async (_event, target) => {
   }
 });
 
+// ============================================================
+// v1.4.0 — IPC MESIN NOVACUT: tulis hasil render LANGSUNG ke disk
+// (stream chunk via fs:save-begin/chunk/end — file ratusan MB tak
+// pernah menumpuk di memori) + stat file + notifikasi + shutdown.
+// Semantik sama dengan fsBridge.ts di sisi renderer.
+// ============================================================
+const fs = require("fs");
+const { Notification } = require("electron");
+
+function safeFileName(name) {
+  const base = String(name || "hasil.webm").split(/[\\/]/).pop() || "hasil.webm";
+  let ext = "";
+  const m = base.match(/\.[a-z0-9]{2,5}$/i);
+  if (m) ext = m[0];
+  const stem = base.slice(0, base.length - ext.length).replace(/[\\/:*?"<>|]/g, "_").slice(0, 140) || "hasil";
+  return stem + (ext || ".webm");
+}
+
+const liveWrites = new Map();
+let writeSeq = 0;
+
+ipcMain.handle("fs:choose-dir", async (_event, current) => {
+  try {
+    const res = await dialog.showOpenDialog({
+      title: "Pilih Folder Hasil Render & Split",
+      defaultPath: typeof current === "string" && current ? current : app.getPath("videos"),
+      properties: ["openDirectory", "createDirectory"],
+      buttonLabel: "PILIH FOLDER INI",
+    });
+    if (res.canceled || !res.filePaths || !res.filePaths[0]) return { canceled: true };
+    lastOutputDir = res.filePaths[0];
+    return { canceled: false, path: res.filePaths[0] };
+  } catch (e) {
+    logLine("Gagal dialog folder: " + (e && e.message));
+    return { canceled: true };
+  }
+});
+
+ipcMain.handle("fs:save-file", async (_event, payload) => {
+  try {
+    const { dir, name, data } = payload || {};
+    if (typeof dir !== "string" || dir.length > 500) return { ok: false, error: "folder tidak valid" };
+    await fs.promises.mkdir(dir, { recursive: true });
+    const target = path.join(dir, safeFileName(name));
+    const buf = Buffer.from(data);
+    await fs.promises.writeFile(target, buf);
+    logLine("Hasil disimpan: " + target);
+    return { ok: true, path: target };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || "gagal menulis" };
+  }
+});
+
+ipcMain.handle("fs:save-begin", async (_event, payload) => {
+  try {
+    const { dir, name } = payload || {};
+    if (typeof dir !== "string" || dir.length > 500) return { ok: false, error: "folder tidak valid" };
+    await fs.promises.mkdir(dir, { recursive: true });
+    const target = path.join(dir, safeFileName(name));
+    const fh = await fs.promises.open(target, "w");
+    const id = "w" + ++writeSeq;
+    liveWrites.set(id, { fh, path: target });
+    logLine("Mulai tulis langsung: " + target);
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || "gagal membuka berkas" };
+  }
+});
+
+ipcMain.handle("fs:save-chunk", async (_event, payload) => {
+  const { id, data, position } = payload || {};
+  const w = liveWrites.get(id);
+  if (!w) return { ok: false, error: "sesi tulis tidak ditemukan" };
+  try {
+    const buf = Buffer.from(data);
+    if (buf.length === 0) return { ok: true };
+    if (typeof position === "number") {
+      await w.fh.write(buf, 0, buf.length, position);
+    } else {
+      await w.fh.write(buf);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || "gagal menulis potongan" };
+  }
+});
+
+ipcMain.handle("fs:save-end", async (_event, payload) => {
+  const { id } = payload || {};
+  const w = liveWrites.get(id);
+  if (!w) return { ok: false, error: "sesi tulis tidak ditemukan" };
+  liveWrites.delete(id);
+  try {
+    await w.fh.sync();
+    await w.fh.close();
+    logLine("Selesai menulis: " + w.path);
+    return { ok: true, path: w.path };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || "gagal menutup berkas" };
+  }
+});
+
+ipcMain.handle("fs:open-folder", async (_event, dir) => {
+  try {
+    const res = await shell.openPath(dir);
+    return res ? { ok: false, error: res } : { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || "gagal" };
+  }
+});
+
+ipcMain.handle("fs:stat-file", async (_event, payload) => {
+  try {
+    const { dir, name } = payload || {};
+    const st = await fs.promises.stat(path.join(dir, safeFileName(name)));
+    return { ok: true, size: st.size, path: path.join(dir, name) };
+  } catch {
+    return { ok: false };
+  }
+});
+
+ipcMain.handle("app:notify", async (_event, payload) => {
+  try {
+    const { title, body } = payload || {};
+    if (!Notification.isSupported()) return { ok: false };
+    const n = new Notification({
+      title: String(title || "KolosalCut").slice(0, 80),
+      body: String(body || "").slice(0, 200),
+      icon: path.join(process.resourcesPath, "app.ico"),
+      silent: false,
+    });
+    n.on("click", () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+    });
+    n.show();
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+});
+
+ipcMain.handle("app:shutdown", async () => {
+  try {
+    logLine("PC akan dimatikan dalam 60 detik (permintaan pengguna)");
+    require("child_process").exec("shutdown /s /t 60");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || "gagal" };
+  }
+});
+
 function createWindow(port) {
   mainWindow = new BrowserWindow({
     width: 1440,

@@ -12,7 +12,7 @@ export type { UploadResult };
 
 interface UploadZoneProps {
   uploaded: UploadResult | null;
-  onUploaded: (info: UploadResult, objectUrl: string) => void;
+  onUploaded: (info: UploadResult, objectUrl: string, file: File) => void;
   onCleared: () => void;
   onError: (msg: string) => void;
   /**
@@ -42,7 +42,7 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError, variant }
         .then((res) => {
           setBusy(false);
           setProgress(100);
-          onUploaded(res, URL.createObjectURL(file));
+          onUploaded(res, URL.createObjectURL(file), file);
         })
         .catch((e: Error) => {
           setBusy(false);

@@ -7,7 +7,7 @@ import { uploadVideo, fmtSize, type UploadResult } from "@/lib/upload-client";
 import { PreviewCanvas } from "@/components/kolosal/preview-canvas";
 import { SettingsPanel } from "@/components/kolosal/settings-panel";
 import { ExportPanel } from "@/components/kolosal/export-panel";
-import { ResultPanel } from "@/components/kolosal/result-panel";
+import { ResultPanel, type KcResultFile } from "@/components/kolosal/result-panel";
 import { Timeline } from "@/components/kolosal/timeline";
 import {
   DEFAULT_SETTINGS,
@@ -19,8 +19,16 @@ import {
   getFrameStyle,
   titleFromFilename,
 } from "@/lib/video-config";
-import type { JobPublic } from "@/lib/server/jobs";
-import { generateCoverPayload, isNovacutCover } from "@/lib/cover-render";
+// v1.4.0: SELURUH pengolahan video kini MESIN NOVACUT (WebCodecs) di sisi aplikasi.
+// Modul mesin hanya boleh dimuat di browser (menyentuh document/canvas) —
+// karena itu di-import DINAMIS di handler, bukan statis di kepala berkas.
+type KcModule = typeof import("@/lib/kc-bridge");
+type KcItem = import("@/lib/kc-bridge").KcItem;
+let kcMod: Promise<KcModule> | null = null;
+function getKc(): Promise<KcModule> {
+  kcMod ??= import("@/lib/kc-bridge");
+  return kcMod;
+}
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -57,8 +65,17 @@ interface QueueItem {
   uploadProgress: number;
   uploadId?: string;
   info?: UploadResult;
-  jobId?: string;
-  job?: JobPublic | null;
+  /** progres render mesin NOVACUT (0..1) */
+  kcProgress?: number;
+  /** keterangan fase render (dari label mesin) */
+  kcPhase?: string;
+  /** hasil render video ini (isi saat status selesai/gagal) */
+  result?: {
+    status: "done" | "error";
+    error?: string;
+    outDir?: string;
+    parts: KcResultFile[];
+  };
   settings: Settings;
 }
 
@@ -66,8 +83,10 @@ function cloneSettings(s: Settings): Settings {
   return JSON.parse(JSON.stringify(s)) as Settings;
 }
 
-function fileUrl(jobId: string, name: string) {
-  return `/api/file?job=${encodeURIComponent(jobId)}&name=${encodeURIComponent(name)}`;
+/** folder induk dari sebuah path file (Windows/Unix) */
+function dirNameOf(p: string): string {
+  const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  return i > 0 ? p.slice(0, i) : p;
 }
 
 /** unggah satu file dengan laporan progres (XHR streaming — aman untuk 10GB) */
@@ -154,7 +173,7 @@ export default function Home() {
     if (!selectedUid) return;
     setItems((prev) =>
       prev.map((it) =>
-        it.uid === selectedUid && !it.jobId ? { ...it, settings: cloneSettings(settings) } : it
+        it.uid === selectedUid && it.status === "siap" ? { ...it, settings: cloneSettings(settings) } : it
       )
     );
   }, [settings, selectedUid]);
@@ -266,13 +285,13 @@ export default function Home() {
   );
 
   const onSingleUploaded = useCallback(
-    (info: UploadResult, objectUrl: string) => {
+    (info: UploadResult, objectUrl: string, file?: File) => {
       const snap = cloneSettings(settingsRef.current);
       snap.title.text = info.title;
       uidRef.current += 1;
       const item: QueueItem = {
         uid: `v${uidRef.current}`,
-        file: null,
+        file: file ?? null,
         name: info.originalName,
         size: info.size,
         objectUrl,
@@ -316,58 +335,6 @@ export default function Home() {
     }
   }, [toast]);
 
-  // ==================== POLLING STATUS BATCH ====================
-  const activeIds = items
-    .filter(
-      (i) =>
-        i.jobId &&
-        i.status !== "selesai" &&
-        i.status !== "gagal" &&
-        i.status !== "batal"
-    )
-    .map((i) => i.jobId!);
-
-  useEffect(() => {
-    if (activeIds.length === 0) return;
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/jobs?ids=${activeIds.join(",")}`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as { jobs: (JobPublic | null)[] };
-        setItems((prev) =>
-          prev.map((it) => {
-            if (!it.jobId) return it;
-            const idx = activeIds.indexOf(it.jobId);
-            if (idx < 0) return it;
-            const j = data.jobs[idx];
-            if (!j) return it;
-            const status: ItemStatus =
-              j.status === "done"
-                ? "selesai"
-                : j.status === "error"
-                  ? "gagal"
-                  : j.status === "canceled"
-                    ? "batal"
-                    : j.status === "processing"
-                      ? "proses"
-                      : "antre";
-            if (j.status === "error" && it.status !== "gagal") {
-              toast({
-                title: `Render gagal: ${it.name}`,
-                description: j.error,
-                variant: "destructive",
-              });
-            }
-            return { ...it, job: j, status };
-          })
-        );
-      } catch {
-        /* abaikan sementara */
-      }
-    }, 1500);
-    return () => clearInterval(timer);
-  }, [activeIds.join(","), toast]);
-
   // ==================== AKSI ====================
   const onElementChange = useCallback((key: string, el: Partial<TextElement>) => {
     setSettings((s) => ({
@@ -393,7 +360,7 @@ export default function Home() {
     let n = 0;
     setItems((prev) =>
       prev.map((it) => {
-        if (it.jobId) return it; // yang sudah/sedang diproses tidak diubah
+        if (it.status !== "siap") return it; // yang sudah/sedang diproses tidak diubah
         n++;
         const ns = cloneSettings(settingsRef.current);
         // judul tetap otomatis dari nama file masing-masing video
@@ -411,116 +378,132 @@ export default function Home() {
     });
   }, [toast]);
 
-  const readyCount = items.filter((i) => i.uploadId && !i.jobId && i.status === "siap").length;
+  const readyCount = items.filter((i) => i.uploadId && !i.result && i.status === "siap").length;
   const busyCount = items.filter((i) => i.status === "antre" || i.status === "proses").length;
 
+  // ==================== MESIN RENDER NOVACUT (v1.4.0) ====================
+  // Tidak ada lagi polling job server — mesin NOVACUT berjalan di aplikasi
+  // dan melaporkan progres lewat subscription langsung.
+
   const startProcessAll = useCallback(async () => {
-    const ready = itemsRef.current.filter((i) => i.uploadId && !i.jobId && i.status === "siap");
-    if (ready.length === 0 || starting) return;
+    const kc = await getKc();
+    if (starting || kc.isKcBatchRunning()) return;
+    const ready = itemsRef.current.filter(
+      (i) => i.uploadId && !i.result && i.status === "siap" && i.file
+    );
+    if (ready.length === 0) {
+      toast({
+        title: "Belum ada video siap",
+        description: "Tambahkan video dulu — file yang masih mengunggah belum bisa dirender.",
+      });
+      return;
+    }
     setStarting(true);
-    let ok = 0;
+    setCoverPreview(false);
+    const kcItems: KcItem[] = ready.map((it) => ({
+      id: it.uid,
+      name: it.name,
+      duration: it.info?.duration ?? 0,
+      width: it.info?.width ?? 1080,
+      height: it.info?.height ?? 1920,
+      file: it.file!,
+      objectUrl: it.objectUrl,
+      uploadId: it.uploadId,
+      settings: cloneSettings(it.settings),
+    }));
+    // tandai baris sebagai masuk antrean mesin
+    setItems((prev) =>
+      prev.map((it) =>
+        ready.some((r) => r.uid === it.uid)
+          ? { ...it, status: "antre", kcProgress: 0, kcPhase: "MENUNGGU...", result: undefined }
+          : it
+      )
+    );
     try {
-      for (const it of ready) {
-        try {
-          // v1.3.5: render PNG cover ala NOVACUT (overlay + teks per bagian)
-          // sebelum job dikirim — gagal bikin PNG jatuh ke cover klasik.
-          let coverOverlay: string | undefined;
-          let coverParts: string[] | undefined;
-          if (isNovacutCover(it.settings)) {
-            const jobSegs = it.info ? computeSegments(it.info.duration, it.settings) : [];
-            if (jobSegs.length > 0) {
-              try {
-                const payload = await generateCoverPayload(
-                  it.settings,
-                  it.settings.title.text.trim() || it.info?.title || titleFromFilename(it.name),
-                  jobSegs.length
-                );
-                coverOverlay = payload.coverOverlay;
-                coverParts = payload.coverParts;
-              } catch {
-                /* canvas gagal (mis. tab latar) — lanjut tanpa overlay */
-              }
+      await kc.startKcBatch(kcItems, settingsRef.current, (snap) => {
+        const byId = new Map(snap.jobs.map((j) => [j.id, j]));
+        setItems((prev) =>
+          prev.map((it) => {
+            const j = byId.get(it.uid);
+            if (!j) return it;
+            if (j.status === "selesai") {
+              // hanya hasil milik video ini (atribusi kcJobId dari mesin)
+              const own = snap.results.filter((r) => r.kcJobId === it.uid);
+              const parts: KcResultFile[] = own.map((r) => ({
+                file: r.name,
+                size: r.size,
+                duration: 0,
+                ...(r.savedPath ? { savedPath: r.savedPath } : {}),
+              }));
+              const anySaved = parts.find((p) => p.savedPath);
+              return {
+                ...it,
+                status: "selesai" as ItemStatus,
+                kcProgress: 1,
+                kcPhase: "SELESAI",
+                result: {
+                  status: "done" as const,
+                  ...(anySaved?.savedPath ? { outDir: dirNameOf(anySaved.savedPath) } : {}),
+                  parts,
+                },
+              };
             }
-          }
-          const res = await fetch("/api/process", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              uploadId: it.uploadId,
-              originalName: it.name,
-              title: it.settings.title.text.trim() || it.info?.title || titleFromFilename(it.name),
-              duration: it.info?.duration,
-              width: it.info?.width,
-              height: it.info?.height,
-              hasAudio: it.info?.hasAudio,
-              settings: it.settings,
-              parallel: settingsRef.current.parallel,
-              coverOverlay,
-              coverParts,
-            }),
-          });
-          const data = await res.json();
-          if (res.ok) {
-            ok++;
-            setItems((prev) =>
-              prev.map((x) =>
-                x.uid === it.uid ? { ...x, jobId: data.jobId, job: null, status: "antre" } : x
-              )
-            );
-          } else {
-            toast({
-              title: `Gagal memproses: ${it.name}`,
-              description: data.error,
-              variant: "destructive",
-            });
-          }
-        } catch (e) {
-          toast({
-            title: `Gagal memproses: ${it.name}`,
-            description: (e as Error).message,
-            variant: "destructive",
-          });
-        }
-      }
-      if (ok > 0) {
-        setCoverPreview(false);
-        toast({
-          title: "Render dimulai",
-          description: `${ok} video masuk antrean — ${settingsRef.current.parallel}× paralel, urutan dari video pertama.`,
-        });
-      }
+            if (j.status === "batal") {
+              return { ...it, status: "batal" as ItemStatus, kcProgress: j.progress, kcPhase: "DIBATALKAN" };
+            }
+            if (j.status === "gagal") {
+              return {
+                ...it,
+                status: "gagal" as ItemStatus,
+                kcProgress: j.progress,
+                kcPhase: j.label || "GAGAL",
+                result: { status: "error" as const, error: j.label || "Render gagal", parts: [] },
+              };
+            }
+            const status: ItemStatus = j.status === "jalan" ? "proses" : "antre";
+            return {
+              ...it,
+              status,
+              kcProgress: j.progress,
+              kcPhase: (j.label || "MERENDER...").toUpperCase(),
+            };
+          })
+        );
+      });
+      toast({
+        title: "Render selesai",
+        description: "Semua video yang dipilih telah diproses mesin NOVACUT.",
+      });
+    } catch (e) {
+      toast({
+        title: "Render terhenti",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
     } finally {
       setStarting(false);
     }
   }, [starting, toast]);
 
-  // ==================== PEMBATALAN (v1.3.5, ala NOVACUT) ====================
+  // ==================== PEMBATALAN (mesin NOVACUT, langsung) ====================
   const cancelJobById = useCallback(
-    (jobId: string) => {
-      void fetch(`/api/job?id=${encodeURIComponent(jobId)}`, { method: "DELETE" })
-        .then(() => {
-          toast({ title: "Render dibatalkan", description: "Video ini dihentikan — bagian yang sudah selesai tetap tersimpan." });
-        })
-        .catch(() => {
-          /* antrean akan tetap dibersihkan oleh status polling */
-        });
+    (uid: string) => {
+      void getKc().then((kc) => kc.cancelKcBatch({ id: uid }));
+      toast({ title: "Render dibatalkan", description: "Video ini dihentikan — bagian yang sudah selesai tetap tersimpan." });
     },
     [toast]
   );
 
   const cancelAllJobs = useCallback(() => {
     const running = itemsRef.current.filter(
-      (i) => i.jobId && (i.status === "antre" || i.status === "proses")
+      (i) => i.status === "antre" || i.status === "proses"
     );
-    running.forEach((i) => {
-      void fetch(`/api/job?id=${encodeURIComponent(i.jobId!)}`, { method: "DELETE" }).catch(() => {});
+    if (running.length === 0) return;
+    void getKc().then((kc) => kc.cancelKcBatch({ all: true }));
+    toast({
+      title: "Semua render dibatalkan",
+      description: `${running.length} video dihentikan — bagian yang sudah selesai tetap tersimpan.`,
     });
-    if (running.length > 0) {
-      toast({
-        title: "Semua render dibatalkan",
-        description: `${running.length} video dihentikan — bagian yang sudah selesai tetap tersimpan.`,
-      });
-    }
   }, [toast]);
 
   // ==================== PRATINJAU ====================
@@ -746,14 +729,14 @@ export default function Home() {
                                 value={
                                   it.status === "mengunggah"
                                     ? it.uploadProgress
-                                    : Math.round((it.job?.progress ?? 0) * 100)
+                                    : Math.round((it.kcProgress ?? 0) * 100)
                                 }
                                 className="h-1.5 flex-1"
                               />
                               <span className="font-tech text-[9px] text-cyan-100/60 tabular-nums w-20 truncate">
                                 {it.status === "mengunggah"
                                   ? `UNGGAH ${it.uploadProgress}%`
-                                  : (it.job?.phase ?? "MENUNGGU...")}
+                                  : (it.kcPhase ?? "MENUNGGU...")}
                               </span>
                             </div>
                           )}
@@ -811,14 +794,14 @@ export default function Home() {
 
             {/* --- hasil render per video (selesai / gagal saja; progres ada di panel EKSPORT) --- */}
             {items
-              .filter((i) => i.job && (i.job.status === "done" || i.job.status === "error"))
+              .filter((i) => i.result)
               .map((i) => (
                 <div key={i.uid} className="flex flex-col gap-1 shrink-0">
                   <p className="font-tech text-[10px] tracking-[0.16em] text-cyan-100/60 px-1 flex items-center gap-1.5">
                     <UploadCloud className="w-3 h-3" aria-hidden />
                     {i.name}
                   </p>
-                  <ResultPanel job={i.job ?? null} />
+                  <ResultPanel result={i.result ?? null} />
                 </div>
               ))}
           </aside>
@@ -829,17 +812,11 @@ export default function Home() {
       <footer className="mt-auto border-t border-cyan-300/12 bg-slate-950/70">
         <div className="max-w-[1600px] mx-auto px-4 h-12 flex items-center justify-between">
           <p className="font-tech text-[10px] tracking-[0.2em] text-cyan-100/40">
-            KOLOSALCUT // NEXT.JS + FFMPEG ENGINE
+            KOLOSALCUT // NOVACUT WEBCodecs ENGINE
           </p>
-          <a
-            href={selected && selected.job ? fileUrl(selected.job.id, selected.job.parts[0]?.file ?? "") : undefined}
-            download
-            className={`font-tech text-[10px] tracking-[0.2em] hidden sm:block ${
-              selected?.job?.parts.length ? "text-cyan-300/70 hover:text-cyan-200" : "text-zinc-600"
-            }`}
-          >
-            SEMUA PROSES BERJALAN LOKAL
-          </a>
+          <span className="font-tech text-[10px] tracking-[0.2em] hidden sm:block text-cyan-300/70">
+            MESIN NOVACUT · 100% OFFLINE · TANPA WATERMARK
+          </span>
         </div>
       </footer>
     </div>

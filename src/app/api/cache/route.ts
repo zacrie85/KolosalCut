@@ -16,7 +16,6 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import { UPLOADS_DIR, EXPORTS_DIR } from "@/lib/server/ffmpeg";
-import { activeCount } from "@/lib/server/queue";
 
 export const runtime = "nodejs";
 
@@ -118,7 +117,7 @@ export async function GET() {
   return NextResponse.json({
     dataDir,
     isDesktop,
-    busy: activeCount() > 0,
+    busy: false, // mesin NOVACUT berjalan di sisi aplikasi (bukan server)
     uploads: { ...uploads, bytes: uploads.bytes + tmpBytes, files: uploads.files + tmpFiles },
     exports: exportsSt,
     caches: { bytes: cacheBytes + logBytes, files: cacheFiles },
@@ -128,12 +127,6 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    if (activeCount() > 0) {
-      return NextResponse.json(
-        { error: "Masih ada video yang sedang dirender. Tunggu selesai atau batalkan dulu, lalu bersihkan cache." },
-        { status: 409 }
-      );
-    }
     const body = (await req.json().catch(() => ({}))) as {
       uploads?: boolean;
       exports?: boolean;
