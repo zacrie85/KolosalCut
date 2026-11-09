@@ -620,6 +620,13 @@ export async function analyzeVideoFrames(url: string, duration: number, count = 
     scores.push({ time: t, score: exposure * 0.45 + contrast * 0.35 + color * 0.2, brightness: mean, contrast: std });
   }
   scores.sort((a, b) => b.score - a.score);
+  // v1.4.8: lepaskan elemen sekaligus — dekoder tidak boleh menumpuk antar cover
+  try {
+    video.removeAttribute("src");
+    video.load();
+  } catch {
+    /* abaikan */
+  }
   return { scores, best: scores[0] ?? null };
 }
 
@@ -639,6 +646,13 @@ export async function grabFrame(url: string, time: number, maxW = 1280): Promise
   const ctx = c.getContext("2d");
   if (!ctx) return null;
   ctx.drawImage(video, 0, 0, c.width, c.height);
+  // v1.4.8: lepaskan elemen sekaligus — dekoder tidak boleh menumpuk antar cover
+  try {
+    video.removeAttribute("src");
+    video.load();
+  } catch {
+    /* abaikan */
+  }
   return c.toDataURL("image/jpeg", 0.92);
 }
 

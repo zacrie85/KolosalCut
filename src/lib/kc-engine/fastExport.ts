@@ -15,7 +15,7 @@
 
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target, StreamTarget as Mp4StreamTarget } from "mp4-muxer";
 import { Muxer as WebmMuxer, ArrayBufferTarget as WebmTarget, StreamTarget as WebmStreamTarget } from "webm-muxer";
-import { engine, type RenderState } from "./engine";
+import { engine, type ComposeWork, type RenderState } from "./engine";
 import { ensureAppFonts } from "./fonts";
 import { DiskFileWriter } from "./fsBridge";
 import { getMusicBuffer, musicDefById } from "./music";
@@ -494,6 +494,10 @@ class VideoPump {
   private static AHEAD_PAUSE = 0.1;
   /** batas koreksi paksa lewat seek (detik) — juga dipakai untuk putaran ulang klip */
   private static AHEAD_SEEK = 0.18;
+  /** v1.4.8: toleransi frame yang digambar — lebih dari ini = seek TEPAT ke target.
+   * Dulu overdraf sampai AHEAD_PAUSE (0,1 dtk ≈ 3 frame 30fps) hanya dijeda saja →
+   * sesekali SATU frame hasil digambar dari masa depan (= kedipan halus). */
+  private static DRAW_TOL = 0.05;
 
   constructor(el: HTMLVideoElement, clip: Clip) {
     this.el = el;
@@ -642,14 +646,13 @@ class VideoPump {
       return;
     }
     await this.settle();
-    if (cur() > target + VideoPump.AHEAD_PAUSE) {
-      // sedikit terlalu jauh -> jeda supaya tidak makin lari (murah, tanpa seek)
-      try {
-        this.el.pause();
-      } catch {
-        /* abaikan */
-      }
-    } else if (!this.el.paused) {
+    if (cur() > target + VideoPump.DRAW_TOL) {
+      // v1.4.8: terlalu jauh di depan → seek TEPAT ke target (frame persis,
+      // anti kedip). Dulu hanya dijeda — overdraf ≤0,1 dtk tetap digambar.
+      await this.seekTo(target);
+      return;
+    }
+    if (!this.el.paused) {
       // posisi pas: jeda agar frame yang digambar = frame target
       try {
         this.el.pause();
@@ -671,14 +674,55 @@ class VideoPump {
   }
 }
 
+/** v1.4.8 — elemen <video> KHUSUS satu bagian render (bukan elemen bersama engine).
+ * Dulu: primeVideoAt memakai engine.elFor (SATU elemen per ASET) sehingga 5 bagian
+ * paralel dari film yang sama memakai SATU elemen <video> yang sama → pompa saling
+ * play/seek/pause di elemen itu → composeFrame menggambar posisi acak → VIDEO
+ * HASIL SPLIT KEDIP-KEDIP. Elemen khusus dilepas setelah bagian selesai
+ * (lepaskan src + load()) supaya dekoder tidak menumpuk antar bagian. */
+function newPumpVideo(clip: Clip, rs: RenderState): HTMLVideoElement | null {
+  const asset = rs.assets.find((a) => a.id === clip.assetId);
+  if (!asset || asset.musicId) return null;
+  const v = document.createElement("video");
+  v.src = asset.url;
+  v.preload = "auto";
+  v.playsInline = true;
+  v.muted = true; // decode pompa tanpa suara — audio lewat jalur PCM/stream-copy
+  v.crossOrigin = "anonymous";
+  return v;
+}
+
+/** lepas elemen video khusus — hentikan dekoder media agar tidak menumpuk */
+function releasePumpVideo(el: HTMLVideoElement | undefined | null) {
+  if (!el) return;
+  try {
+    el.pause();
+  } catch {
+    /* abaikan */
+  }
+  try {
+    el.removeAttribute("src");
+    el.load();
+  } catch {
+    /* abaikan */
+  }
+}
+
 /** siapkan semua klip video aktif pada waktu t: elemen ada + di-seek ke posisi awal */
-async function primeVideoAt(start: number, rs: RenderState): Promise<Map<string, VideoPump>> {
+async function primeVideoAt(start: number, rs: RenderState, videoEls: Map<string, HTMLVideoElement>): Promise<Map<string, VideoPump>> {
   const pumps = new Map<string, VideoPump>();
   for (const clip of rs.clips) {
     if (clip.kind !== "video") continue;
     if (start < clip.start || start >= clip.start + clip.duration) continue;
-    const el = engine.elFor(clip, rs.assets);
-    if (!(el instanceof HTMLVideoElement)) continue;
+    // v1.4.8: elemen KHUSUS bagian ini (dibuat sekali per export, dipakai ulang
+    // antar pemompaan ulang klip di rentang yang sama) — BUKAN elemen bersama
+    let el = videoEls.get(clip.id);
+    if (!el) {
+      const made = newPumpVideo(clip, rs);
+      if (!made) continue;
+      el = made;
+      videoEls.set(clip.id, el);
+    }
     // tunggu elemen benar-benar siap (metadata + frame pertama) — bila video
     // tidak bisa didekode (codec tidak didukung), beri pesan jelas, bukan video hitam
     const t0 = performance.now();
@@ -847,8 +891,12 @@ export async function exportRangeFast(opts: FastExportOptions): Promise<FastExpo
   });
 
   // posisikan elemen & mulai pompa
+  // v1.4.8: elemen video KHUSUS bagian ini — dulu elemen bersama engine (per aset)
+  // dipakai SEMUA bagian paralel satu film → pompa saling ganggu → hasil kedip-kedip
   engine.pause();
-  let pumps = await primeVideoAt(opts.start, rs);
+  const videoEls = new Map<string, HTMLVideoElement>();
+  const work: ComposeWork = { videoEls, scratch: document.createElement("canvas") };
+  let pumps = await primeVideoAt(opts.start, rs, videoEls);
 
   const gopSize = fps * 2;
   // v1.0.14: progres dikirim maksimal ~4x/detik (dulu SETIAP frame = 30x/detik
@@ -861,46 +909,60 @@ export async function exportRangeFast(opts: FastExportOptions): Promise<FastExpo
       opts.onProgress?.(p);
     }
   };
-  for (let f = 0; f < totalFrames; f++) {
-    if (encErr) throw encErr; // v1.4.6: encoder mati → gagal bersih → mesin cadangan
-    const t = opts.start + f / fps;
-    // bila klip video berganti di tengah rentang, pompa ulang untuk klip baru
-    const actives = activeVideoClips(t, rs);
-    const missing = actives.filter((c) => !pumps.has(c.id));
-    if (missing.length) {
-      for (const p of pumps.values()) p.stop();
-      pumps = await primeVideoAt(t, rs);
+  // v1.4.8: pelepasan media (pompa + elemen khusus) dipisah dari penutupan encoder,
+  // dan dipanggil JUGA bila loop frame melempar (dulu hanya jalur sukses →
+  // dekoder & elemen menumpuk saat batch panjang)
+  const releaseMedia = () => {
+    for (const p of pumps.values()) p.stop();
+    for (const el of videoEls.values()) releasePumpVideo(el);
+    videoEls.clear();
+  };
+  const closeAll = () => {
+    closeQuietly(encoder);
+    releaseMedia();
+    if (localCache) decodeCache.dispose();
+  };
+  try {
+    for (let f = 0; f < totalFrames; f++) {
+      if (encErr) throw encErr; // v1.4.6: encoder mati → gagal bersih → mesin cadangan
+      const t = opts.start + f / fps;
+      // bila klip video berganti di tengah rentang, pompa ulang untuk klip baru
+      const actives = activeVideoClips(t, rs);
+      const missing = actives.filter((c) => !pumps.has(c.id));
+      if (missing.length) {
+        for (const p of pumps.values()) p.stop();
+        pumps = await primeVideoAt(t, rs, videoEls);
+      }
+      // pastikan decode sudah mencapai posisi yang dibutuhkan (akurasi gerak)
+      for (const clip of actives) {
+        const pump = pumps.get(clip.id);
+        if (pump) await pump.waitFor(srcTimeOf(clip, t));
+      }
+      if (f % (fps >> 1) === 0) await ensureImagesReady(t, rs);
+      // v1.4.8: gambar dari elemen KHUSUS bagian ini (work.videoEls) — bukan elemen
+      // bersama yang bisa sedang di-seek oleh bagian paralel lain (= kedip-kedip)
+      engine.composeFrame(ctx, t, true, rs, work);
+      const frame = new VideoFrame(canvas, {
+        timestamp: Math.round((t - opts.start) * 1e6),
+        duration: Math.round(1e6 / fps),
+      });
+      encoder.encode(frame, { keyFrame: f % gopSize === 0 });
+      frame.close();
+      // v1.4.6: antrean encode dijaga batas waktu (dulu await tanpa batas —
+      // encoder macet = bagian menggantung selamanya = progres mentok 99%)
+      const qDeadline = performance.now() + 60_000;
+      while (encoder.encodeQueueSize > 6) {
+        if (encErr) throw encErr;
+        if (performance.now() > qDeadline) throw new Error("antrean encoder macet (kilat)");
+        await sleep(2);
+      }
+      emitProgress((f + 1) / totalFrames);
     }
-    // pastikan decode sudah mencapai posisi yang dibutuhkan (akurasi gerak)
-    for (const clip of actives) {
-      const pump = pumps.get(clip.id);
-      if (pump) await pump.waitFor(srcTimeOf(clip, t));
-    }
-    if (f % (fps >> 1) === 0) await ensureImagesReady(t, rs);
-    engine.composeFrame(ctx, t, true, rs);
-    const frame = new VideoFrame(canvas, {
-      timestamp: Math.round((t - opts.start) * 1e6),
-      duration: Math.round(1e6 / fps),
-    });
-    encoder.encode(frame, { keyFrame: f % gopSize === 0 });
-    frame.close();
-    // v1.4.6: antrean encode dijaga batas waktu (dulu await tanpa batas —
-    // encoder macet = bagian menggantung selamanya = progres mentok 99%)
-    const qDeadline = performance.now() + 60_000;
-    while (encoder.encodeQueueSize > 6) {
-      if (encErr) throw encErr;
-      if (performance.now() > qDeadline) throw new Error("antrean encoder macet (kilat)");
-      await sleep(2);
-    }
-    emitProgress((f + 1) / totalFrames);
+  } finally {
+    releaseMedia();
   }
 
   opts.onStage?.("Menyelesaikan berkas...");
-  const closeAll = () => {
-    closeQuietly(encoder);
-    for (const p of pumps.values()) p.stop();
-    if (localCache) decodeCache.dispose();
-  };
   try {
     // v1.4.6: flush dijaga 90 dtk (normal < 5 dtk) — bila Chromium tak kunjung
     // selesai, bagian gagal bersih & diulang mesin kilat, batch TETAP TAMAT.

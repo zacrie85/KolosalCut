@@ -27,6 +27,11 @@ function clampOff(v?: number): number {
 export interface ComposeWork {
   /** key = clip.assetId (atau clip.id) → frame yang sedang dirender */
   videoFrames?: Map<string, VideoFrame | null>;
+  /** v1.4.8 — key = clip.id (atau clip.assetId) → elemen <video> KHUSUS export:
+   * dipakai mesin kilat agar tiap bagian paralel punya elemen sendiri-sendiri.
+   * Dulu semua bagian paralel satu film memakai elemen bersama elFor (per aset)
+   * → pompa saling seek/play di elemen yang sama → hasil KEDIP-KEDIP. */
+  videoEls?: Map<string, HTMLVideoElement>;
   tmpA?: HTMLCanvasElement;
   tmpB?: HTMLCanvasElement;
   scratch?: HTMLCanvasElement;
@@ -687,8 +692,12 @@ class EditorEngine {
         sw = vf.displayWidth;
         sh = vf.displayHeight;
       } else {
+        // v1.4.8: elemen KHUSUS export (mesin kilat) dipakai dulu bila ada —
+        // tiap bagian paralel punya elemen sendiri sehingga pompa decode tidak
+        // saling ganggu (dulu satu elemen bersama = hasil kedip-kedip)
+        const own = work?.videoEls?.get(clip.id) ?? work?.videoEls?.get(clip.assetId ?? "");
         // noSync: elemen sudah diposisikan exporter (pump/seek) — ambil saja elemennya
-        const el = noSync ? (this.elFor(clip, rs?.assets) as HTMLVideoElement | null) : this.syncMedia(clip, track ?? { id: "", kind: "video", name: "", muted: false, hidden: false }, t, this.playing, true);
+        const el = (own as HTMLVideoElement | undefined) ?? (noSync ? (this.elFor(clip, rs?.assets) as HTMLVideoElement | null) : this.syncMedia(clip, track ?? { id: "", kind: "video", name: "", muted: false, hidden: false }, t, this.playing, true));
         if (el && el.videoWidth) {
           src = el;
           sw = el.videoWidth;
