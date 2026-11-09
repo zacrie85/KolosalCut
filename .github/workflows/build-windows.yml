@@ -12,6 +12,12 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    # v1.4.4: cermin cadangan — malam rilis ini CDN GitHub sering 504 saat
+    # mengunduh zip Electron & biner NSIS; cermin npmmirror dipakai otomatis
+    # agar build tidak gagal karena jaringan.
+    env:
+      ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
     steps:
       - name: Checkout kode
         uses: actions/checkout@v4
@@ -29,15 +35,35 @@ jobs:
         run: npm ci
 
       - name: Pastikan binary Electron tersedia (untuk uji runtime paketan)
-        run: node node_modules/electron/install.js
+        shell: pwsh
+        run: |
+          # v1.4.4: coba 4x — unduhan zip Electron kadang 504 sesaat
+          $ok = $false
+          foreach ($i in 1..4) {
+            Write-Host "Percobaan electron install ke-$i..."
+            node node_modules/electron/install.js
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Start-Sleep -Seconds 20
+          }
+          if (-not $ok) { throw "electron install gagal 4x berturut" }
 
       - name: Unduh FFmpeg & FFprobe (build Windows)
         shell: pwsh
         run: |
+          # fungsi unduh tahan gangguan: 5 percobaan, jeda 20 dtk (CDN kadang 504)
+          function Unduh([string]$url, [string]$out) {
+            foreach ($i in 1..5) {
+              try { Invoke-WebRequest -Uri $url -OutFile $out -TimeoutSec 600; return $true } catch {
+                Write-Host "gagal ($($_.Exception.Message)) — coba lagi $i/5..."
+                Start-Sleep -Seconds 20
+              }
+            }
+            return $false
+          }
           New-Item -ItemType Directory -Force -Path resources/bin | Out-Null
           $url = "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip"
           Write-Host "Mengunduh FFmpeg..."
-          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
+          if (-not (Unduh $url "$env:RUNNER_TEMP\ffmpeg.zip")) { throw "unduh FFmpeg gagal 5x" }
           Write-Host "Ekstrak arsip..."
           Expand-Archive -Path "$env:RUNNER_TEMP\ffmpeg.zip" -DestinationPath "$env:RUNNER_TEMP\ffmpeg" -Force
           $ffmpeg = Get-ChildItem -Path "$env:RUNNER_TEMP\ffmpeg" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
@@ -49,10 +75,20 @@ jobs:
       - name: Unduh mesin & model Whisper — teks otomatis (v1.3.3)
         shell: pwsh
         run: |
+          # fungsi unduh tahan gangguan (sesi pwsh tiap step terpisah — definisikan ulang)
+          function Unduh([string]$url, [string]$out) {
+            foreach ($i in 1..5) {
+              try { Invoke-WebRequest -Uri $url -OutFile $out -TimeoutSec 600; return $true } catch {
+                Write-Host "gagal ($($_.Exception.Message)) — coba lagi $i/5..."
+                Start-Sleep -Seconds 20
+              }
+            }
+            return $false
+          }
           New-Item -ItemType Directory -Force -Path resources/models | Out-Null
           $tag = "b5454"
           Write-Host "Mengunduh whisper-cli (whisper.cpp $tag)..."
-          Invoke-WebRequest -Uri "https://github.com/ggml-org/whisper.cpp/releases/download/$tag/whisper-bin-x64.zip" -OutFile "$env:RUNNER_TEMP\whisper.zip"
+          if (-not (Unduh "https://github.com/ggml-org/whisper.cpp/releases/download/$tag/whisper-bin-x64.zip" "$env:RUNNER_TEMP\whisper.zip")) { throw "unduh whisper-cli gagal 5x" }
           Expand-Archive -Path "$env:RUNNER_TEMP\whisper.zip" -DestinationPath "$env:RUNNER_TEMP\whisper" -Force
           $cli = Get-ChildItem -Path "$env:RUNNER_TEMP\whisper" -Recurse -Filter "whisper-cli.exe" | Select-Object -First 1
           if (-not $cli) { Write-Host "=== isi zip ==="; Get-ChildItem -Recurse "$env:RUNNER_TEMP\whisper" | Select-Object FullName; throw "whisper-cli.exe tidak ditemukan di zip" }
@@ -62,7 +98,7 @@ jobs:
           Write-Host "Mengunduh model suara Bahasa Indonesia (q5_1)..."
           foreach ($m in @("tiny","base","small")) {
             $f = "ggml-$m-q5_1.bin"
-            Invoke-WebRequest -Uri "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$f" -OutFile "resources/models/$f"
+            if (-not (Unduh "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$f" "resources/models/$f")) { throw "unduh model $f gagal 5x" }
           }
           Write-Host "=== resources/bin ==="; Get-ChildItem resources/bin | Format-Table Name, Length
           Write-Host "=== resources/models ==="; Get-ChildItem resources/models | Format-Table Name, Length
