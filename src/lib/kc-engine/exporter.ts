@@ -966,6 +966,9 @@ export async function runBatchExport(assetIds: string[]) {
   // v1.0.15: hitung pekerjaan yang gagal supaya pesan akhir TIDAK bohong
   // "semua file tersimpan ✓" padahal ada yang gagal (bug tampilan v1.0.14)
   let failedCount = 0;
+  /** v1.4.6: batch sudah benar-benar tamat — tick zombie tak boleh menimpa
+   * progres 100% kembali ke 99% (ditulis di finally, dibaca report()) */
+  let batchEnded = false;
 
   try {
     // rasio video hasil (pilihan di Menu Export Playlist): ganti ukuran proyek sementara
@@ -1084,6 +1087,7 @@ export async function runBatchExport(assetIds: string[]) {
      * muncul padahal rendernya sendiri cepat. Angka kini murni kecepatan render. */
     let renderT0 = 0;
     const report = () => {
+      if (batchEnded) return; // v1.4.6: batch tamat — jangan timpa progres 100%
       let sum = 0;
       let wsum = 0;
       for (let i = 0; i < jobs.length; i++) {
@@ -1097,6 +1101,12 @@ export async function runBatchExport(assetIds: string[]) {
       const eta = prog > 0.02 && elapsed > 8 ? Math.max(0, (elapsed / prog) * (1 - prog)) : undefined;
       useEditor.getState().patchExportState({ progress: prog, ...(eta !== undefined ? { eta } : {}) });
     };
+
+    /** v1.4.6: peta "detak jantung" per bagian yang sedang dirender —
+     * key "vi:i" -> timestamp tick terakhir. Dipakai penjaga antrean untuk
+     * mendeteksi bagian yang MACET (tanpa progres berminit-menit) supaya
+     * batch tetap bisa tamat alih-alih mentok 99% selamanya. */
+    const segTickAt = new Map<string, number>();
 
     /** v1.0.14: bersihkan elemen video/gambar film yang SUDAH selesai.
      * Dulu elemen hanya dibersihkan SETELAH SEMUA film selesai — 50 film = 50
@@ -1197,9 +1207,12 @@ export async function runBatchExport(assetIds: string[]) {
     };
 
     /** film tamat bila semua bagiannya sudah tuntas (render/skip/gagal) */
+    const finishedFilms = new Set<number>(); // v1.4.6: cegah tamat dua kali (zombie vs penjaga)
     const finishFilmIfDone = (vi: number, total: number) => {
       const done = segDone.get(vi);
       if (!done || done.size < total) return;
+      if (finishedFilms.has(vi)) return;
+      finishedFilms.add(vi);
       filmActive.delete(vi);
       ramUsed -= filmRamMB(vi);
       if (ramUsed < 0) ramUsed = 0;
@@ -1388,6 +1401,7 @@ export async function runBatchExport(assetIds: string[]) {
         const onProgress = (p: number) => {
           const frac = ((segDone.get(vi)?.size ?? 0) + p) / total;
           jobProgress[vi] = frac;
+          segTickAt.set(`${vi}:${i}`, Date.now()); // v1.4.6: detak jantung bagian
           tick(
             () => {
               report();
@@ -1460,6 +1474,39 @@ export async function runBatchExport(assetIds: string[]) {
       let segRunning = 0;
       await new Promise<void>((resolve) => {
         let settled = false;
+        /** v1.4.6 — PENJAGA ANTREAN (jaring pengaman terakhir anti mentok 99%):
+         * tiap 30 detik periksa bagian yang sedang berjalan. Bagian TANPA detak
+         * progres > 8 menit dianggap MACET (encoder mati diam-diam / driver GPU /
+         * memori): ditandai gagal, dilepas dari antrean, batch LANJUT berjalan.
+         * Dulu SATU bagian yang menggantung membekukan seluruh batch di 99%
+         * selamanya — "Batch selesai" tak pernah muncul. Kini mustahil beku. */
+        const REAP_MS = 8 * 60_000;
+        const watchdog = setInterval(() => {
+          try {
+            const now = Date.now();
+            for (const [key, ts] of [...segTickAt]) {
+              if (now - ts < REAP_MS) continue;
+              const [viS, iS] = key.split(":").map(Number);
+              if (segDone.get(viS)?.has(iS)) {
+                segTickAt.delete(key); // sudah terhitung tuntas — tinggal zombie akuntansi
+                continue;
+              }
+              segTickAt.delete(key);
+              const total2 = prepped.get(viS)?.ranges.length || Math.max(1, jobParts[viS] || 1);
+              failedSegs.set(viS, (failedSegs.get(viS) || 0) + 1);
+              try {
+                markJob(jobs[viS]?.origId ?? "", { label: `Bagian ${iS + 1} macet — dihentikan ✗` });
+              } catch {
+                /* UI */
+              }
+              segRunning = Math.max(0, segRunning - 1);
+              markSegDone(viS, iS, total2);
+            }
+            pump(); // sekalian: bila ada bug check-tamat, ini menyelesaikannya
+          } catch {
+            /* penjaga tak boleh meledak */
+          }
+        }, 30_000);
         /** film yang sudah ditandai batal — tidak diproses dua kali */
         const cancelHandled = new Set<number>();
         /** tandai film batal: seluruh bagiannya dianggap tuntas */
@@ -1517,14 +1564,17 @@ export async function runBatchExport(assetIds: string[]) {
             segQueue.shift();
             ramUsed += w;
             segRunning++;
+            segTickAt.set(`${t.vi}:${t.i}`, Date.now()); // v1.4.6: mulai detak
             void renderSegment(t.vi, t.i).finally(() => {
-              segRunning--;
+              segRunning = Math.max(0, segRunning - 1); // v1.4.6: klem (zombie bisa mengurangi dua kali)
               ramUsed -= w;
               if (ramUsed < 0) ramUsed = 0;
+              segTickAt.delete(`${t.vi}:${t.i}`);
               pump();
             });
           }
           if (prepRunning === 0 && segRunning === 0 && prepNext >= jobs.length && segQueue.length === 0) {
+            clearInterval(watchdog); // v1.4.6: batch tamat — penjaga berhenti
             settled = true;
             resolve();
           }
@@ -1618,6 +1668,7 @@ export async function runBatchExport(assetIds: string[]) {
     console.error("Batch export gagal:", e);
     useEditor.getState().patchExportState({ label: `Gagal: ${msg}` });
   } finally {
+    batchEnded = true; // v1.4.6: kunci progres — tick zombie tak boleh menimpa 100%
     useEditor.setState({ clips: snapshot.clips, tracks: snapshot.tracks, assets: snapshot.assets, project: snapshot.project });
     // lepaskan elemen media sisa batch (hemat memori/dekoder) + bersihkan cache cover
     batchCoverCache.clear();

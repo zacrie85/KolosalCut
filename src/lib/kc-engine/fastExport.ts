@@ -25,6 +25,41 @@ import type { Clip, MediaAsset, Track } from "./types";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
+/**
+ * v1.4.6 — BATAS WAKTU ANTAR-PROMISE (penangkal mentok 99%).
+ * Kasus nyata pengguna: export & split cepat sampai 99% lalu BERHENTI SELAMANYA.
+ * Penyebabnya satu await tanpa batas waktu di ujung pipeline (encoder.flush()
+ * Chromium yang tak pernah selesai bila encoder error asinkron, antrean encode
+ * macet, atau tulis disk yang tak kunjung selesai). Cukup SATU bagian yang
+ * menggantung di titik itu — progres total membeku di 99% dan "Batch selesai"
+ * tak pernah muncul. Kini semua titik rawan dijaga batas waktu; bila lewat,
+ * bagian itu GAGAL BERSIH dan diulang mesin cadangan — batch selalu tamat.
+ */
+export function withTimeout<T>(p: Promise<T>, ms: number, apa: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`Macet >${Math.round(ms / 1000)} dtk saat ${apa}`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      },
+    );
+  });
+}
+
+/** tutup encoder tanpa melempar (sudah tertutup = abaikan) */
+export function closeQuietly(enc: { close: () => void }) {
+  try {
+    enc.close();
+  } catch {
+    /* sudah closed */
+  }
+}
+
 export interface FastSupport {
   /** codec video terpilih, mis. "avc1.42E01E" */
   videoCodec: string;
@@ -433,10 +468,15 @@ export async function encodeAudioRange(
     });
     encoder.encode(ad);
     ad.close();
-    if (encoder.encodeQueueSize > 24) await sleep(2);
+    // v1.4.6: antrean audio juga dijaga batas waktu (dulu await tanpa batas)
+    const aqDeadline = performance.now() + 60_000;
+    while (encoder.encodeQueueSize > 24) {
+      if (performance.now() > aqDeadline) throw new Error("antrean encoder audio macet");
+      await sleep(2);
+    }
   }
-  await encoder.flush();
-  encoder.close();
+  await withTimeout(encoder.flush(), 60_000, "menyelesaikan encoder audio");
+  closeQuietly(encoder);
 }
 
 /** Pump decode satu klip video: putar cepat + catat mediaTime terakhir.
@@ -783,12 +823,16 @@ export async function exportRangeFast(opts: FastExportOptions): Promise<FastExpo
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) throw new Error("Kanvas offscreen gagal");
 
+  // v1.4.6: error encoder TERTANGKAP — dulu hanya console.error sehingga bila
+  // encoder mati diam-diam, flush() bisa tak pernah selesai (mentok 99%).
+  let encErr: unknown = null;
   const encoder = new VideoEncoder({
     output: (chunk, meta) => {
       muxer.addVideoChunk(chunk, meta as never);
     },
     error: (e) => {
       console.error("VideoEncoder:", e);
+      encErr ??= e;
     },
   });
   encoder.configure({
@@ -818,6 +862,7 @@ export async function exportRangeFast(opts: FastExportOptions): Promise<FastExpo
     }
   };
   for (let f = 0; f < totalFrames; f++) {
+    if (encErr) throw encErr; // v1.4.6: encoder mati → gagal bersih → mesin cadangan
     const t = opts.start + f / fps;
     // bila klip video berganti di tengah rentang, pompa ulang untuk klip baru
     const actives = activeVideoClips(t, rs);
@@ -839,15 +884,39 @@ export async function exportRangeFast(opts: FastExportOptions): Promise<FastExpo
     });
     encoder.encode(frame, { keyFrame: f % gopSize === 0 });
     frame.close();
-    while (encoder.encodeQueueSize > 6) await sleep(2);
+    // v1.4.6: antrean encode dijaga batas waktu (dulu await tanpa batas —
+    // encoder macet = bagian menggantung selamanya = progres mentok 99%)
+    const qDeadline = performance.now() + 60_000;
+    while (encoder.encodeQueueSize > 6) {
+      if (encErr) throw encErr;
+      if (performance.now() > qDeadline) throw new Error("antrean encoder macet (kilat)");
+      await sleep(2);
+    }
     emitProgress((f + 1) / totalFrames);
   }
 
   opts.onStage?.("Menyelesaikan berkas...");
-  await encoder.flush();
-  encoder.close();
-  for (const p of pumps.values()) p.stop();
-  if (localCache) decodeCache.dispose();
+  const closeAll = () => {
+    closeQuietly(encoder);
+    for (const p of pumps.values()) p.stop();
+    if (localCache) decodeCache.dispose();
+  };
+  try {
+    // v1.4.6: flush dijaga 90 dtk (normal < 5 dtk) — bila Chromium tak kunjung
+    // selesai, bagian gagal bersih & diulang mesin kilat, batch TETAP TAMAT.
+    await withTimeout(encoder.flush(), 90_000, "menyelesaikan encoder (kilat)");
+  } catch (e) {
+    closeAll();
+    if (writer) {
+      try {
+        await writer.abort();
+      } catch {
+        /* abaikan */
+      }
+    }
+    throw e;
+  }
+  closeAll();
   muxer.finalize();
   // v1.0.14: bila menulis langsung ke disk, tutup file & kembalikan path
   // v1.0.15: flush antrean tulis DULU (pastikan semua potongan muxer benar-benar
@@ -856,8 +925,9 @@ export async function exportRangeFast(opts: FastExportOptions): Promise<FastExpo
   let savedPath: string | undefined;
   if (writer) {
     try {
-      await diskFlush?.flush();
-      savedPath = await writer.finish();
+      // v1.4.6: tulis disk & penutupan berkas dijaga batas waktu (anti mentok 99%)
+      await withTimeout(diskFlush?.flush() ?? Promise.resolve(), 180_000, "menulis video ke disk (kilat)");
+      savedPath = await withTimeout(writer.finish(), 120_000, "menutup berkas (kilat)");
     } catch (e) {
       await writer.abort();
       throw e;

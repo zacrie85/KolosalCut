@@ -1,30 +1,37 @@
-# KolosalCut v1.4.5
+# KolosalCut v1.4.6
 
-PENYEBAB SEBENARNYA export 4–9 jam AKHIRNYA KETEMU — dan kini **TURBO BISA MELIHAT KECEPATANNYA SENDIRI**. Kalau render ternyata jalan di CPU (lambat), Turbo otomatis pindah ke konfigurasi yang sudah TERBUKTI di PC Anda oleh NOVACUT Studio (24 menit). Hasil E2E: lulus penuh, dan baris status kini menampilkan mesin + kecepatan nyata secara langsung.
+KECEPATAN v1.4.5 TETAP JALAN (terbukti di PC Anda 🚀) — dan BUG "MENTOK 99%" SUDAH DIBASMI. Laporan Anda: export & split kini cepat, TAPI progres berhenti di 99% dan "Batch selesai" tak kunjung muncul. Penyebabnya ketemu: ada **satu titik tunggu tanpa batas waktu di UJUNG pipeline**. Cukup SATU bagian yang menggantung di titik itu (biasanya bagian terakhir) — seluruh progres membeku di 99% selamanya.
 
-## 1. PENYEBAB SEBENARNYA: "CEK GPU" YANG MENIPU 🐞🔍
+## 1. PENYEBAB MENTOK 99%: SATU AWAIT TANPA BATAS WAKTU 🐞⏳
 
-- Sejak v1.4.2, KolosalCut menentukan encoder lewat `isConfigSupported` dengan preferensi "prefer-hardware". Ternyata **cek ini TIDAK BISA dipercaya**: Chromium menjawab "didukung" WALAUPUN nanti diam-diam memakai **OpenH264 SOFTWARE** — karena GPU menolak profil/resolusi yang ditawarkan lebih dulu (High Profile L4.0 di 1080x1920).
-- Akibatnya pada banyak PC, render berjalan di **software encode 10–20 fps = 0,3–0,6x realtime** → film 90 menit selesai **4–9 jam**. Itulah yang tetap terjadi di v1.4.4: saklar mesin sudah dihapus, TAPI konfigurasi encoder hasil probe masih bisa jatuh ke CPU.
-- NOVACUT Studio v1.0.22 lolos dari jebakan ini karena probe-nya berbeda (720p, Baseline L3.1, tanpa preferensi hardware) → Chromium memilih **encoder GPU (D3D11)** → video yang sama selesai 24 menit.
+- Progres keseluruhan batch memang sengaja di-cap 99% selama masih ada pekerjaan — angka 100% + tulisan "Batch selesai" hanya ditulis SETELAH semua bagian benar-benar tamat (termasuk tahap terakhir: menyelesaikan encoder, merapikan berkas MP4, menutup file di disk).
+- Masalahnya: tahap terakhir itu memakai `await` TANPA batas waktu. Bila encoder video Chromium mati diam-diam (error asinkron dari driver GPU), `flush()` bisa TIDAK PERNAH selesai. Antrean encode yang macet dan tulis disk yang tak kunjung selesai punya risiko yang sama.
+- Akibatnya: semua bagian selesai cepat (99%), lalu SATU bagian menggantung selamanya di tahap pamungkas → progres beku, tombol/selesai tak pernah muncul. Persis yang Anda alami.
 
-## 2. TURBO KINI MENGUKUR KECEPATAN NYATA & OTOMATIS GANTI KONFIGURASI ⚡🧠
+## 2. SEMUA TITIK RAWAN KINI DIJAGA BATAS WAKTU — BATCH PASTI TAMAT ⏱️🛡️
 
-- Saat bagian pertama dirender, Turbo **mengukur throughput loop penuh** (decode + compose + encode) pada 60 frame pertama.
-- Kalau kecepatan terukur **< 1,2x realtime** (tanda berjalan di software), Turbo **mengulang bagian itu dengan tangga konfigurasi terbukti NOVACUT** (Baseline L3.1 → L4.0 → Main → High, TANPA preferensi hardware — persis jalur yang memenangkan benchmark 24 menit di PC Anda).
-- Konfigurasi tercepat yang terbukti **dicache selama sesi** — bagian berikutnya langsung pakai yang cepat, tanpa bolak-balik.
-- Di PC dengan GPU sehat: tidak ada perubahan — kualitas High Profile tetap dipakai (probe pertama memang cepat).
+- **Menyelesaikan encoder** (flush): dijaga 90 detik (normalnya < 5 detik).
+- **Menulis video ke disk & menutup berkas**: dijaga 180 / 120 detik.
+- **Antrean encode video & audio**: dijaga 60 detik tanpa kemajuan.
+- **Audio sunyi cover & encoder audio**: dijaga 30–60 detik.
+- Bila salah satu lewat batas: bagian itu **gagal bersih** (file setengah jadi dibuang) lalu **otomatis diulang oleh mesin cadangan** yang sudah terbukti — batch LANJUT dan SELALU tamat. Tidak ada lagi beku selamanya.
 
-## 3. BADAN MESIN TAMPIL TERUS DI BARIS STATUS — TIDAK ADA LAGI MESIN RAHASIA 🏷️
+## 3. ERROR ENCODER KINI TERTANGKAP — TIDAK ADA LAGI "MATI DIAM-DIAM" 🔎
 
-- Baris tiap video kini selalu memakai label seperti:
-  - `EPISODE 11/19 · TURBO 8.4x` → render di GPU, selesai dalam hitungan menit.
-  - `EPISODE 11/19 · TURBO CPU 0.8x` → render di CPU (PC tanpa GPU yang bisa dipakai Chromium) — jujur, supaya kelihatan penyebabnya.
-  - `EPISODE 11/19 · KILAT (alasan...)` → Turbo tidak bisa jalan untuk video ini + alasannya.
-- Dulu alasan "Turbo mati: ..." langsung tertimpa label bagian — pengguna tidak pernah tahu mesin apa yang bekerja. Kini badge menempel permanen sampai bagian selesai.
-- Kecepatan terukur diperbarui tiap bagian dimulai — angkanya nyata dari loop render, bukan tebakan.
+- Dulu error encoder video hanya dicatat ke console — aplikasi terus menunggu sesuatu yang tak akan pernah datang.
+- Kini error itu **langsung terdeteksi** di tengah render: bagian berhenti bersih dan diulang mesin cadangan, alasan kegagalan tampil di baris video.
+
+## 4. PENJAGA ANTREAN (JARING PENGAMAN TERAKHIR) 🧷
+
+- Tiap 30 detik, antrean memeriksa detak progres tiap bagian yang sedang dirender.
+- Bagian yang **tanpa progres > 8 menit** dianggap macet: ditandai "macet — dihentikan ✗", dilepas dari antrean, dan batch **terus berjalan** ke bagian berikutnya.
+- Dulu satu bagian yang menggantung membekukan seluruh batch; kini mustahil beku — paling banter satu bagian ditandai gagal dan bisa diulang lewat "LANJUTKAN" (bagian yang sudah jadi tidak dirender ulang).
+
+## 5. PROGRES 100% TIDAK BISA DITIMPA BALIK 💯
+
+- Perbaikan kecil: tick sisa dari bagian zombie tak bisa lagi menimpa progres 100% kembali ke 99% setelah "Batch selesai" tampil.
 
 ## CATATAN
 
-- Tidak ada perubahan tampilan & setelan lain — semua fitur v1.4.4 (posisi vertikal, 10 bingkai judul, cover 100 template, teks otomatis offline, paralel 5, estimasi jujur) tetap sama persis.
-- Uji: tsc bersih di kode mesin (3 error hanya berkas contoh/template bawaan yang tak terpakai), build desktop lulus, E2E penuh lewat UI lulus — 3 bagian + 1 file utuh, MP4 H.264 1080x1920 terverifikasi ffprobe, badge `TURBO CPU 0.8x` terlihat hidup di log (sandbox tanpa GPU — di PC ber-GPU badge akan menunjukkan `TURBO Nx` dengan N jauh lebih besar).
+- **Kecepatan tidak berubah sama sekali** — mesin Turbo v1.4.5 yang sudah terbukti cepat di PC Anda dipakai persis sama. Perbaikan ini murni menjamin batch SELALU tamat.
+- Uji: tsc bersih di kode mesin, build desktop lulus, E2E lewat UI lulus — batch split 4 bagian + 1 file utuh, semuanya MP4 H.264 1080x1920 terverifikasi ffprobe, berakhir di "Batch selesai" progress=100%, badge mesin hidup.

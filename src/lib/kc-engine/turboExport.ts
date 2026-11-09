@@ -16,7 +16,7 @@
 // 2 jam berukuran beberapa GB TIDAK PERNAH dimuat utuh ke memori.
 
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target, StreamTarget as Mp4StreamTarget } from "mp4-muxer";
-import { AudioDecodeCache, DISK_CHUNK, DiskWriteChain, encodeAudioRange, ensureImagesReady, fastSupported } from "./fastExport";
+import { AudioDecodeCache, DISK_CHUNK, DiskWriteChain, closeQuietly, encodeAudioRange, ensureImagesReady, fastSupported, withTimeout } from "./fastExport";
 import { engine, type ComposeWork, type RenderState } from "./engine";
 import { ensureAppFonts } from "./fonts";
 import { DiskFileWriter } from "./fsBridge";
@@ -205,14 +205,17 @@ async function* decodeVideoRange(
 // ===== audio: stream-copy AAC =====
 
 /** Salin sampel AAC sumber [srcStart, srcEnd) ke muxer dengan timestamp baru
- * (periode cover diganti sunyi). Kualitas 100% asli, tanpa decode. */
+ * (periode cover diganti sunyi). Kualitas 100% asli, tanpa decode.
+ * v1.4.6: onPing dipanggil tiap batch baca — penanda "masih hidup" bagi
+ * penjaga antrean (bagian panjang tak boleh dianggap macet selama menyalin). */
 async function copyAudioRange(
   muxer: Mp4Muxer<Mp4Target | Mp4StreamTarget>,
   file: Blob,
   atr: DemuxTrackInfo,
   srcStart: number,
   srcEnd: number,
-  shiftSec: number
+  shiftSec: number,
+  onPing?: () => void
 ): Promise<void> {
   const samples = atr.samples;
   if (!samples.length) return;
@@ -228,6 +231,7 @@ async function copyAudioRange(
   const BATCH = 4 * 1024 * 1024;
   let i = i0;
   while (i < samples.length && samples[i].cts < srcEnd) {
+    onPing?.(); // v1.4.6: sinyal hidup tiap batch
     // satu batch baca (sampel AAC umumnya berurutan di mdat)
     const batch: DemuxSample[] = [];
     let bytes = 0;
@@ -295,8 +299,9 @@ async function encodeSilence(muxer: Mp4Muxer<Mp4Target | Mp4StreamTarget>, sec: 
     ad.close();
     if (enc.encodeQueueSize > 32) await sleep(2);
   }
-  await enc.flush();
-  enc.close();
+  // v1.4.6: flush sunyi dijaga batas waktu (anti mentok 99%)
+  await withTimeout(enc.flush(), 30_000, "menyelesaikan audio sunyi cover");
+  closeQuietly(enc);
 }
 
 // ===== render SATU bagian =====
@@ -479,7 +484,7 @@ async function turboSegmentOnce(opts: TurboSegmentOptions, forceEnc?: TurboEncCf
     // akhir rentang TANPA wrap modulo (lihat catatan di blok video di bawah)
     const segLenA = (clip.duration * clip.speed) / Math.max(1, clip.loopCount);
     const srcEnd = clip.inPoint + clamp(clip.duration * clip.speed, 0, segLenA);
-    await copyAudioRange(muxer, file, atr, srcStart, srcEnd, opts.shift);
+    await copyAudioRange(muxer, file, atr, srcStart, srcEnd, opts.shift, () => opts.onProgress?.(0));
   } else if (support.audioCodec && audioMux) {
     opts.onStage?.("Memproses audio...");
     const cache = opts.audioCache ?? new AudioDecodeCache(new OfflineAudioContext(1, 1, 48000));
@@ -511,9 +516,15 @@ async function turboSegmentOnce(opts: TurboSegmentOptions, forceEnc?: TurboEncCf
     scratch: document.createElement("canvas"),
   };
 
+  // v1.4.6: error encoder TERTANGKAP — dulu hanya console.error sehingga
+  // encoder yang mati diam-diam membuat flush() tak pernah selesai (mentok 99%)
+  let encErr: unknown = null;
   const encoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta as never),
-    error: (e) => console.error("Turbo VideoEncoder:", e),
+    error: (e) => {
+      console.error("Turbo VideoEncoder:", e);
+      encErr ??= e;
+    },
   });
   // v1.4.5: konfigurasi encoder = hasil UKUR NYATA (forceEnc) bila ada,
   // bukan lagi janji probe (isConfigSupported tak bisa membedakan GPU/CPU)
@@ -582,6 +593,7 @@ async function turboSegmentOnce(opts: TurboSegmentOptions, forceEnc?: TurboEncCf
   try {
     for (let f = 0; f < totalFrames; f++) {
       if (pullErr) throw pullErr; // decode gagal → gagal bersih → fallback mesin kilat
+      if (encErr) throw encErr; // v1.4.6: encode gagal → gagal bersih → fallback mesin kilat
       const t = f / fps;
       // v1.4.2: cek gambar klip tiap setengah detik (murah — hanya bila ada
       // gambar belum selesai) — sama seperti mesin kilat
@@ -614,7 +626,14 @@ async function turboSegmentOnce(opts: TurboSegmentOptions, forceEnc?: TurboEncCf
       out.close();
       // frame TIDAK ditutup di sini — bisa dipakai beberapa iterasi (hold frame)
       // (fps render > fps sumber, mis. 30 > 24) — ditutup saat dibuang dari buffer
-      while (encoder.encodeQueueSize > 6) await sleep(2);
+      // v1.4.6: antrean encode dijaga batas waktu (dulu await tanpa batas —
+      // encoder macet = bagian menggantung selamanya = progres mentok 99%)
+      const qDeadline = performance.now() + 60_000;
+      while (encoder.encodeQueueSize > 6) {
+        if (encErr) throw encErr;
+        if (performance.now() > qDeadline) throw new Error("antrean encoder macet (turbo)");
+        await sleep(2);
+      }
       if (buf.length < 4 && !streamDone) await pull();
       emit((f + 1) / totalFrames);
       // v1.4.5: UKUR KECEPATAN NYATA — probe isConfigSupported tidak bisa
@@ -650,15 +669,31 @@ async function turboSegmentOnce(opts: TurboSegmentOptions, forceEnc?: TurboEncCf
   }
 
   opts.onStage?.("Menyelesaikan berkas...");
-  await encoder.flush();
-  encoder.close();
+  try {
+    // v1.4.6: flush dijaga 90 dtk (normal < 5 dtk) — bila Chromium tak kunjung
+    // selesai (encoder error asinkron/driver GPU), bagian gagal bersih & diulang
+    // mesin kilat — batch SELALU tamat, tak ada lagi mentok 99% selamanya.
+    await withTimeout(encoder.flush(), 90_000, "menyelesaikan encoder (turbo)");
+  } catch (e) {
+    closeQuietly(encoder);
+    if (writer) {
+      try {
+        await writer.abort();
+      } catch {
+        /* abaikan */
+      }
+    }
+    throw e;
+  }
+  closeQuietly(encoder);
   muxer.finalize();
 
   let savedPath: string | undefined;
   if (writer) {
     try {
-      await diskFlush?.flush();
-      savedPath = await writer.finish();
+      // v1.4.6: tulis disk & penutupan berkas dijaga batas waktu (anti mentok 99%)
+      await withTimeout(diskFlush?.flush() ?? Promise.resolve(), 180_000, "menulis video ke disk (turbo)");
+      savedPath = await withTimeout(writer.finish(), 120_000, "menutup berkas (turbo)");
     } catch (e) {
       await writer.abort();
       throw e;
