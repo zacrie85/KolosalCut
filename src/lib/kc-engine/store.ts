@@ -67,7 +67,11 @@ export interface EditorState {
   // ===== KolosalCut v1.4.0 — ekstensi mesin =====
   kcFrame: { key: string; bars: boolean; barH: number };
   kcCancel: { all: boolean; ids: string[]; stamp: number };
-  kcDisableTurbo: boolean;
+  // v1.4.4: kcDisableTurbo DIHAPUS — mesin Turbo kini SELALU dipakai bila
+  // video didukung, termasuk saat setelan EKSPORT "Render Penuh". Turbo
+  // menggambar SEMUA gaya (cover, teks, bingkai, frame neon, teks otomatis)
+  // lewat composeFrame yang sama dengan mesin kilat, jadi mematikannya hanya
+  // membuat render 2-20x lebih lambat tanpa keuntungan hasil sama sekali.
   kcLabelTpl: string;
   kcSub: { size: number; posY: number; bg: "bar" | "none" };
   kcDesc: null | { text: string; size: number; relX: number; relY: number; font: string };
@@ -188,8 +192,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   kcFrame: { key: "none", bars: false, barH: 0 },
   /** pembatalan batch: semua / id video tertentu (dipakai tombol BATALKAN) */
   kcCancel: { all: false, ids: [] as string[], stamp: 0 },
-  /** matikan mesin Turbo (setelan EKSPORT "Penuh" — selalu render penuh) */
-  kcDisableTurbo: false,
+  // v1.4.4: kcDisableTurbo dihapus — lihat catatan di tipe state di atas
   /** template label kustom KolosalCut, mis. "BAGIAN KE-{n}" (kosong = gaya NOVACUT) */
   kcLabelTpl: "",
   /** gaya teks otomatis KolosalCut: ukuran fraksi tinggi + posisi Y fraksi (0..1) */

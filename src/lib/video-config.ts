@@ -27,6 +27,8 @@ export type BarSize = "kecil" | "sedang" | "besar";
  *         Bila setelan butuh render (ada cover/efek/teks), otomatis jatuh
  *         ke MESIN PENUH dengan pemberitahuan di fase render.
  * penuh : selalu render ulang penuh (semua gaya & efek dijamin ikut).
+ *         v1.4.4: kini TETAP memakai MESIN TURBO — hasil identik dgn mesin
+ *         kilat (satu jalur composeFrame) tapi jauh lebih cepat.
  */
 export type EngineKey = "auto" | "kilat" | "penuh";
 export const ENGINE_INFO: Record<EngineKey, { label: string; desc: string }> = {
@@ -40,7 +42,8 @@ export const ENGINE_INFO: Record<EngineKey, { label: string; desc: string }> = {
   },
   penuh: {
     label: "Render Penuh",
-    desc: "Render ulang semua bagian — semua cover, efek, teks & gaya dijamin ikut. Paling lambat.",
+    // v1.4.4: bukan lagi "paling lambat" — Turbo selalu aktif di semua mesin
+    desc: "Render ulang semua bagian dgn MESIN TURBO — semua cover, efek, teks & gaya dijamin ikut, tetap cepat.",
   },
 };
 
@@ -435,9 +438,9 @@ export const DEFAULT_SETTINGS: Settings = {
   // v1.3.5: posisi vertikal bawaan = tengah, konsisten dgn panX
   panY: 0.5,
   quality: "balanced",
-  // v1.4.3: default naik 2 -> 4 — export & split KINI 2x lebih cepat
-  // (bagian-bagian dirender serentak; anggaran RAM tetap menjaga memori)
-  parallel: 4,
+  // v1.4.4: default naik 4 -> 5 — setara NOVACUT Studio v1.0.22 (pemenang
+  // benchmark render paralel); anggaran RAM tetap menjaga memori
+  parallel: 5,
   outputDir: "",
   // v1.3.3: teks otomatis MATI secara bawaan — pengguna memilih per video
   // v1.3.4: posY 0.75 = zona subtitle khas reels (sedikit di bawah tengah)

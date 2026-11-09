@@ -145,7 +145,10 @@ export default function Home() {
       const t = JSON.parse(raw) as { quality?: string; parallel?: number };
       // v1.4.3: setelan OPTIMALKAN lama yang masih default 2 dinaikkan ke 4 —
       // export & split kini 2x lebih cepat; anggaran RAM tetap menjaga memori
-      const tunedParallel = Number(t.parallel) === 2 ? 4 : Number(t.parallel);
+      // v1.4.4: semua setelan OPTIMALKAN lama (2/3/4) dinaikkan ke 5 — setara
+      // NOVACUT Studio v1.0.22 yang memenangkan benchmark render paralel
+      const tp = Number(t.parallel);
+      const tunedParallel = tp >= 2 && tp <= 4 ? 5 : tp;
       setSettings((s) => ({
         ...s,
         ...(t.quality === "fast" || t.quality === "balanced" || t.quality === "high"

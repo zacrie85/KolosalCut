@@ -1074,6 +1074,11 @@ export async function runBatchExport(assetIds: string[]) {
      * lebih besar daripada video pendek 1 bagian, supaya ETA akurat */
     const jobParts = new Array(jobs.length).fill(1) as number[];
     const t0 = performance.now();
+    /** v1.4.4: timer ETA kini MULAI saat bagian PERTAMA mulai dirender — dulu
+     * dihitung dari awal batch, jadi persiapan berat (cover + baca suara AI
+     * puluhan menit pada film panjang) ikut terhitung dan estimasi "±9 jam"
+     * muncul padahal rendernya sendiri cepat. Angka kini murni kecepatan render. */
+    let renderT0 = 0;
     const report = () => {
       let sum = 0;
       let wsum = 0;
@@ -1084,7 +1089,7 @@ export async function runBatchExport(assetIds: string[]) {
       }
       const prog = Math.min(0.99, sum / Math.max(1, wsum));
       // v1.0.16: estimasi waktu tersisa — makin akurat setelah ±5% pekerjaan tuntas
-      const elapsed = (performance.now() - t0) / 1000;
+      const elapsed = (performance.now() - (renderT0 || t0)) / 1000;
       const eta = prog > 0.02 && elapsed > 8 ? Math.max(0, (elapsed / prog) * (1 - prog)) : undefined;
       useEditor.getState().patchExportState({ progress: prog, ...(eta !== undefined ? { eta } : {}) });
     };
@@ -1169,11 +1174,15 @@ export async function runBatchExport(assetIds: string[]) {
     /** terpakai RAM (MB): cache audio PCM film aktif + segmen berjalan */
     let ramUsed = 0;
 
-    /** berat RAM cache audio PCM satu film (0 bila audio stream-copy) */
+    /** berat RAM cache audio PCM satu film (0 bila audio stream-copy).
+     * v1.4.4: DIBATASI 350 MB — dulu estimasi duration*0,19 MB/dtk untuk film
+     * 90 menit = ±1 GB, memakan hampir seluruh anggaran RAM 1,5 GB sehingga
+     * antrean hanya sanggup menjalankan 1-2 bagian serentak (export terasa
+     * berhenti). Batas menjaga jalur cadangan (video non-MP4) tetap paralel. */
     const filmRamMB = (vi: number): number => {
       const pr = prepped.get(vi);
       if (!pr || (pr.turbo && pr.audioCopy)) return 0;
-      return (jobs[vi]?.asset.duration || 0) * 0.19;
+      return Math.min(350, (jobs[vi]?.asset.duration || 0) * 0.19);
     };
     /** berat RAM satu segmen yang sedang dirender */
     const segRamMB = (vi: number, partLen: number): number => {
@@ -1286,9 +1295,14 @@ export async function runBatchExport(assetIds: string[]) {
       }
       const tlSubs = mapSubsToTimeline(job.subs, [clip]);
       // ===== keputusan mesin: sekali per film, bukan per bagian =====
-      // v1.4.0 KolosalCut: setelan EKSPORT "Penuh" mematikan mesin Turbo
+      // v1.4.4: saklar kcDisableTurbo DIHAPUS — mesin Turbo SELALU dipakai
+      // bila video didukung, termasuk saat setelan EKSPORT "Render Penuh"
+      // (hasil identik — satu jalur composeFrame sejak v1.4.3). Dulu setelan
+      // "Render Penuh" tanpa sadar mematikan Turbo → mesin lama 2-20x lebih
+      // lambat + antrean RAM tersendat (cache PCM film panjang) = export
+      // 4-9 jam pada film 90 menit. Kini semua jalur memakai Turbo.
       const chk = await turboEligible(job.asset);
-      const turbo = !!chk.ok && clip.loopCount === 1 && !useEditor.getState().kcDisableTurbo;
+      const turbo = !!chk.ok && clip.loopCount === 1;
       const audioCopy = turbo
         ? audioCopyAllowed({ clips: [clip], tracks, assets: [job.asset], project: { width: targetDims.width, height: targetDims.height } }, clip, job.asset)
         : false;
@@ -1316,6 +1330,7 @@ export async function runBatchExport(assetIds: string[]) {
       const total = pr.ranges.length;
       const partTxt = kcPartLabel(pl.labelStyle, i + 1, total, true);
       const tick = makeTick();
+      if (!renderT0) renderT0 = performance.now(); // v1.4.4: ETA mulai dari render pertama
       // v1.4.0: video dibatalkan pengguna — lewati tanpa merender
       if (kcCancelled(jid)) {
         markSegDone(vi, i, total);
@@ -1411,7 +1426,9 @@ export async function runBatchExport(assetIds: string[]) {
       const RAM_BUDGET_MB = 1500;
       // v1.4.0 KolosalCut: jumlah pekerja mengikuti setelan PARALEL pengguna (1-7, dibatasi 5)
       // v1.4.2: batas pekerja naik 5 -> 7 (antrean berbasis anggaran RAM tetap menjaga memori)
-      const MAX_CONC = Math.max(1, Math.min(7, Math.round(Number(useEditor.getState().playlistExport.parallel) || 2)));
+      // v1.4.4: fallback nilai rusak/NaN kini 5 (mengikuti default baru & NOVACUT),
+      // dulu || 2 yang membuat batch lambat tanpa kelihatan penyebabnya
+      const MAX_CONC = Math.max(1, Math.min(7, Math.round(Number(useEditor.getState().playlistExport.parallel) || 5)));
       const PREP_CONC = Math.min(2, Math.max(1, jobs.length));
       let prepNext = 0;
       let prepRunning = 0;

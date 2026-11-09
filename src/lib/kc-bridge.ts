@@ -302,8 +302,8 @@ export async function startKcBatch(
       },
       autoSub: s.subtitle.enabled,
       subLevel: subLevelFor(s.subtitle.mode),
-      // v1.4.3: fallback 4 — export & split default 2x lebih cepat
-      parallel: Math.max(1, Math.min(7, Number(s.parallel) || 4)),
+      // v1.4.4: fallback 5 — export & split setara NOVACUT Studio v1.0.22
+      parallel: Math.max(1, Math.min(7, Number(s.parallel) || 5)),
       quality: bitrateFor(s.quality) >= 14_000_000 ? "maksimal" : bitrateFor(s.quality) <= 4_500_000 ? "ringan" : "tajam",
       smartSplit: false,
       skipExisting: true,
@@ -315,7 +315,12 @@ export async function startKcBatch(
   // ---- overlay frame neon + bar sinema + saklar mesin ----
   useEditor.setState({
     kcFrame: { key: s.frame, bars: s.bars, barH: s.bars ? barHeightOf(s) : 0 },
-    kcDisableTurbo: s.engine === "penuh",
+    // v1.4.4: saklar kcDisableTurbo DIHAPUS — setelan EKSPORT "Render Penuh"
+    // TIDAK lagi mematikan mesin Turbo. Turbo menggambar semua gaya lewat
+    // composeFrame yang sama persis dgn mesin kilat (satu jalur sejak
+    // v1.4.3), jadi hasilnya identik tapi 2-20x lebih cepat. Dulu setelan
+    // ini membuat pengguna "Render Penuh" tanpa sadar jatuh ke mesin lama
+    // yang lambat — itulah penyebab export 4-9 jam pada video panjang.
     kcCancel: { all: false, ids: [], stamp: Date.now() },
   });
   // v1.4.2: TUNGGU overlay siap — dulu hanya "dipanaskan" tanpa menunggu,
