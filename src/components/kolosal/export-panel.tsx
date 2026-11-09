@@ -148,7 +148,15 @@ export function ExportPanel({
   };
 
   // ---- estimasi hasil (ala NOVACUT: "12:34 → ±5 video hasil") ----
-  const ready = items.filter((i) => i.uploadId !== undefined && i.status === "siap");
+  // v1.4.7: hitung dari SEMUA video rencana (siap/antre/proses/selesai) —
+  // dulu hanya "siap" sehingga SAAT MERENDER estimasi kolaps jadi
+  // "0:00 → ±0 file" (menyesatkan, padahal batch jalan 30 bagian).
+  const ready = items.filter(
+    (i) =>
+      i.uploadId !== undefined &&
+      i.info &&
+      (i.status === "siap" || i.status === "antre" || i.status === "proses" || i.status === "selesai")
+  );
   const estFiles = ready.reduce(
     (m, it) => m + (it.info ? computeSegments(it.info.duration, it.settings).length : 0),
     0

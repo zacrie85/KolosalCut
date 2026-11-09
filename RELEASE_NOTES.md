@@ -1,37 +1,26 @@
-# KolosalCut v1.4.6
+# KolosalCut v1.4.7
 
-KECEPATAN v1.4.5 TETAP JALAN (terbukti di PC Anda 🚀) — dan BUG "MENTOK 99%" SUDAH DIBASMI. Laporan Anda: export & split kini cepat, TAPI progres berhenti di 99% dan "Batch selesai" tak kunjung muncul. Penyebabnya ketemu: ada **satu titik tunggu tanpa batas waktu di UJUNG pipeline**. Cukup SATU bagian yang menggantung di titik itu (biasanya bagian terakhir) — seluruh progres membeku di 99% selamanya.
+LAPORAN ANDA: "pilih **berapa bagian** isi 30, tapi hasilnya **64 video** bukan 30." BENAR — itu bug serius, dan sudah DIBASMI di versi ini. Angka yang Anda pilih kini **DIHORMATI 100%**: pilih 30 = tepat 30 file. Pilih 10 = tepat 10 file. Tidak ada lagi jumlah yang "jadi sendiri".
 
-## 1. PENYEBAB MENTOK 99%: SATU AWAIT TANPA BATAS WAKTU 🐞⏳
+## 1. PENYEBAB: PILIHAN "BERAPA BAGIAN" DIABAIKAN MESIN 🐞
 
-- Progres keseluruhan batch memang sengaja di-cap 99% selama masih ada pekerjaan — angka 100% + tulisan "Batch selesai" hanya ditulis SETELAH semua bagian benar-benar tamat (termasuk tahap terakhir: menyelesaikan encoder, merapikan berkas MP4, menutup file di disk).
-- Masalahnya: tahap terakhir itu memakai `await` TANPA batas waktu. Bila encoder video Chromium mati diam-diam (error asinkron dari driver GPU), `flush()` bisa TIDAK PERNAH selesai. Antrean encode yang macet dan tulis disk yang tak kunjung selesai punya risiko yang sama.
-- Akibatnya: semua bagian selesai cepat (99%), lalu SATU bagian menggantung selamanya di tahap pamungkas → progres beku, tombol/selesai tak pernah muncul. Persis yang Anda alami.
+- Menu EKSPORT & SPLIT punya 2 pilihan: **"Berapa bagian"** (mis. 30) dan **"Durasi per video"** (mis. 60 detik). Ternyata sejak v1.4.0, saat perintah diteruskan ke mesin render, **jenis pilihannya tidak ikut dikirim** — mesin selalu disuruh memotong **per durasi**.
+- Akibatnya angka 30 yang Anda isi hanya dipakai untuk tulisan label, sedangkan pemotongan nyata memakai durasi potong bawaan (60 detik/bagian) → film ±64 menit terpotong **64 video**. Persis yang Anda alami: "Bagian 8/64", "PART 10/64".
+- Rumusnya kebetulan cocok untuk mode durasi, jadi bug ini lolos dari semua tes sebelumnya (tes lalu memakai mode durasi, bukan mode jumlah bagian).
 
-## 2. SEMUA TITIK RAWAN KINI DIJAGA BATAS WAKTU — BATCH PASTI TAMAT ⏱️🛡️
+## 2. PERBAIKAN: JENIS PEMOTONGAN SEKARANG IKUT TERKIRIM ✅
 
-- **Menyelesaikan encoder** (flush): dijaga 90 detik (normalnya < 5 detik).
-- **Menulis video ke disk & menutup berkas**: dijaga 180 / 120 detik.
-- **Antrean encode video & audio**: dijaga 60 detik tanpa kemajuan.
-- **Audio sunyi cover & encoder audio**: dijaga 30–60 detik.
-- Bila salah satu lewat batas: bagian itu **gagal bersih** (file setengah jadi dibuang) lalu **otomatis diulang oleh mesin cadangan** yang sudah terbukti — batch LANJUT dan SELALU tamat. Tidak ada lagi beku selamanya.
+- Pilihan Anda kini diteruskan utuh ke mesin:
+  - **"Berapa bagian"** → mesin membagi video **rata menjadi TEPAT N file** (30 = 30 file; tiap bagian sama panjang, isi terakhir tetap utuh sampai frame penutup).
+  - **"Durasi per video"** → mesin memotong **tiap N detik** (perilaku lama, tidak berubah).
+- Total label ikut benar: video ke-30 tampil "PART 30/30" / "Bagian 30/30", nama file `...-part-30-30.mp4`.
+- Berlaku di KEDUA jalur render (mesin Turbo/Kilat maupun jalur cadangan) karena keduanya membaca setelan yang sama.
 
-## 3. ERROR ENCODER KINI TERTANGKAP — TIDAK ADA LAGI "MATI DIAM-DIAM" 🔎
+## 3. BONUS: ESTIMASI PANEL TIDAK LAGI "MENGHILANG" SAAT MERENDER 📊
 
-- Dulu error encoder video hanya dicatat ke console — aplikasi terus menunggu sesuatu yang tak akan pernah datang.
-- Kini error itu **langsung terdeteksi** di tengah render: bagian berhenti bersih dan diulang mesin cadangan, alasan kegagalan tampil di baris video.
-
-## 4. PENJAGA ANTREAN (JARING PENGAMAN TERAKHIR) 🧷
-
-- Tiap 30 detik, antrean memeriksa detak progres tiap bagian yang sedang dirender.
-- Bagian yang **tanpa progres > 8 menit** dianggap macet: ditandai "macet — dihentikan ✗", dilepas dari antrean, dan batch **terus berjalan** ke bagian berikutnya.
-- Dulu satu bagian yang menggantung membekukan seluruh batch; kini mustahil beku — paling banter satu bagian ditandai gagal dan bisa diulang lewat "LANJUTKAN" (bagian yang sudah jadi tidak dirender ulang).
-
-## 5. PROGRES 100% TIDAK BISA DITIMPA BALIK 💯
-
-- Perbaikan kecil: tick sisa dari bagian zombie tak bisa lagi menimpa progres 100% kembali ke 99% setelah "Batch selesai" tampil.
+- Dulu, saat proses export & split berjalan, baris estimasi di panel menyusut jadi **"0:00 → ±0 file"** — padahal batch sedang jalan. Sekarang estimasi tetap tampil ("±30 file hasil") selama proses berlangsung dan setelah selesai, jadi Anda selalu tahu rencana pembagian yang sedang/akan dikerjakan.
 
 ## CATATAN
 
-- **Kecepatan tidak berubah sama sekali** — mesin Turbo v1.4.5 yang sudah terbukti cepat di PC Anda dipakai persis sama. Perbaikan ini murni menjamin batch SELALU tamat.
-- Uji: tsc bersih di kode mesin, build desktop lulus, E2E lewat UI lulus — batch split 4 bagian + 1 file utuh, semuanya MP4 H.264 1080x1920 terverifikasi ffprobe, berakhir di "Batch selesai" progress=100%, badge mesin hidup.
+- **Kecepatan tidak berubah** — mesin Turbo v1.4.5 + jagaan anti-mentok-99% v1.4.6 tetap dipakai persis sama; perbaikan ini murni soal JUMLAH file hasil.
+- Uji: tes logika 9 kasus lulus (mode bagian 30 → tepat 30 rentang; mode durasi 60 dtk pada film 64 mnt → 64 bagian, persis skenario bug Anda) + E2E lewat UI sungguhan: video 12 detik + "Berapa bagian"=4 → **tepat 4 file MP4** H.264 1080x1920 (ffprobe), isi 4×3 dtk = utuh tanpa hilang, batch tamat "Batch selesai" progress=100%. Mode "Durasi per video" diuji ulang → tetap benar.

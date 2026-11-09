@@ -261,7 +261,13 @@ export async function startKcBatch(
   useEditor.setState({
     exportSettings: {
       mode: s.splitMode === "off" ? ("single" as const) : ("split" as const),
-      splitBy: "duration" as const,
+      // v1.4.7 FIX SPLIT 64 vs 30 — splitBy WAJIB mengikuti pilihan pengguna:
+      // dulu selalu "duration" walau pengguna memilih "Berapa bagian" → angka
+      // bagian (mis. 30) DIABAIKAN, video dipotong per partSeconds (60 dtk)
+      // dan film ±64 menit menjadi 64 video. Kini:
+      //   "Berapa bagian"    → splitBy "count"   = tepat N file hasil
+      //   "Durasi per video" → splitBy "duration" = potong tiap N detik
+      splitBy: s.splitMode === "parts" ? ("count" as const) : ("duration" as const),
       parts: Math.max(1, Math.min(50, s.splitParts)),
       partSeconds: Math.max(3, Math.min(3600, s.splitSeconds)),
       includeCover: s.coverEnabled,
