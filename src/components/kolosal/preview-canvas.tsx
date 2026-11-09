@@ -16,6 +16,8 @@ import {
 } from "@/lib/video-config";
 import { Button } from "@/components/ui/button";
 import { Film, Play, Pause, SkipBack, SkipForward, Image as ImageIcon } from "lucide-react";
+// v1.4.3: bingkai judul digambar di pratinjau — WYSIWYG sama dgn hasil export
+import { drawTitleFrame, saneTitleFrame } from "@/lib/kc-engine/titleFrames";
 import {
   gradeFilterString,
   applyGradeTints,
@@ -278,10 +280,27 @@ export function PreviewCanvas({
       const widest = Math.max(...lines.map((l) => ctx.measureText(l).width), 10);
       const blockH = lines.length * lineH;
       let cx = it.el.relX * CW; // pusat x
-      let ty = it.el.relY * CH; // atas y
+      // v1.4.3: relY = posisi PUSAT blok teks — sama persis dgn mesin render
+      // (posV) sehingga pratinjau = hasil export (WYSIWYG), termasuk di ujung
+      // atas/bawah blok tetap utuh tidak terpotong tepi layar
+      let ty = it.el.relY * CH - blockH / 2; // atas y (dari pusat)
       cx = Math.min(Math.max(cx, widest / 2 + 9), CW - widest / 2 - 9);
       ty = Math.min(Math.max(ty, 9), CH - blockH - 9);
       const x0 = cx - widest / 2;
+
+      // v1.4.3: BINGKAI JUDUL — digambar SEBELUM tulisan, hanya utk blok judul.
+      // Ukuran otomatis ikut panjang & lebar tulisan + skala manual (menu TEKS).
+      // Interior bingkai kosong — video tetap terlihat di dalamnya.
+      if (it.style === "title" && settings.titleFrame) {
+        const frId = saneTitleFrame(settings.titleFrame);
+        if (frId) {
+          const padXf = px * 0.85;
+          const padYf = px * 0.42;
+          const fw = Math.max(px * 1.6, (widest + padXf * 2) * settings.titleFrameW);
+          const fh = Math.max(px * 1.7, (blockH + padYf * 2) * settings.titleFrameH);
+          drawTitleFrame(ctx, frId, cx - fw / 2, ty + blockH / 2 - fh / 2, fw, fh);
+        }
+      }
 
       const pad = 9;
       bboxes.push({ key: it.key, x: x0 - pad, y: ty - pad, w: widest + pad * 2, h: blockH + pad * 2 });

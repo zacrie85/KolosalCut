@@ -193,11 +193,24 @@ export async function startKcBatch(
       fontAuto: kcFont(s.title.font),
       // posisi bebas KolosalCut -> offset NOVACUT (anchor top=0.16h/center=0.5h/bottom=0.86h)
       titleX: Math.round((s.title.relX - 0.5) * 100),
-      titleY: Math.round(Math.max(-45, Math.min(45, (s.title.relY + 0.04 - 0.16) * 100))),
+      // v1.4.3: LAYAR COVER TETAP seperti sebelumnya — posisi judul di cover
+      // dibekukan di anchor lama (relY lama 0.055 -> -7) karena slider POSISI
+      // VERTIKAL baru hanya menggeser tulisan saat video berjalan
+      titleY: -7,
       descX: Math.round((s.desc.relX - 0.5) * 100),
       descY: Math.round(Math.max(-45, Math.min(45, (s.desc.relY + 0.02 - 0.86) * 100))),
       partX: Math.round((s.label.relX - 0.5) * 100),
-      partY: Math.round(Math.max(-45, Math.min(45, (s.label.relY + 0.03 - 0.86) * 100))),
+      // v1.4.3: partY tidak lagi dipakai — posisi part kini lewat partV (langsung 0..100)
+      partY: 0,
+      // v1.4.3: posisi vertikal LANGSUNG saat video berjalan (0 = paling atas,
+      // 100 = paling bawah) — dari drag pratinjau / slider Posisi Vertikal.
+      // Judul+deskripsi DEFAULT di PALING BAWAH (relY 0.955), part DI ATAS (0.055)
+      titleV: Math.round(Math.max(0, Math.min(100, s.title.relY * 100))),
+      partV: Math.round(Math.max(0, Math.min(100, s.label.relY * 100))),
+      // v1.4.3: bingkai judul (10 gaya) + skala ukuran otomatis/manual
+      titleFrame: s.titleFrame || "",
+      titleFrameW: s.titleFrameW,
+      titleFrameH: s.titleFrameH,
     },
     // v1.4.2 — GAYA COVER NOVACUT: judul di ATAS, deskripsi + part/episode
     // SEBARIS ("deskripsi · Episode n/total") tepat di bawah judul — persis
@@ -289,7 +302,8 @@ export async function startKcBatch(
       },
       autoSub: s.subtitle.enabled,
       subLevel: subLevelFor(s.subtitle.mode),
-      parallel: Math.max(1, Math.min(7, Number(s.parallel) || 2)),
+      // v1.4.3: fallback 4 — export & split default 2x lebih cepat
+      parallel: Math.max(1, Math.min(7, Number(s.parallel) || 4)),
       quality: bitrateFor(s.quality) >= 14_000_000 ? "maksimal" : bitrateFor(s.quality) <= 4_500_000 ? "ringan" : "tajam",
       smartSplit: false,
       skipExisting: true,

@@ -54,6 +54,17 @@ export interface TextData {
   subOffX?: number;
   /** geser vertikal baris deskripsi (fraksi tinggi layar) */
   subOffY?: number;
+  /** v1.4.3: posisi vertikal LANGSUNG blok teks (fraksi tinggi layar 0..1;
+   * 0 = paling atas, 1 = paling bawah). Bila ada, menimpa pos/offY sebagai
+   * posisi dasar — offY tetap berlaku sebagai geser halus tambahan. */
+  posV?: number;
+  /** v1.4.3: id bingkai di belakang blok teks (lihat titleFrames.ts;
+   * ""/undefined = tanpa bingkai). Interior bingkai kosong — video terlihat. */
+  frame?: string;
+  /** v1.4.3: skala LEBAR bingkai (0.6–2.5; 1 = otomatis ikut lebar tulisan) */
+  frameW?: number;
+  /** v1.4.3: skala TINGGI bingkai (0.6–2.5; 1 = otomatis ikut tinggi tulisan) */
+  frameH?: number;
 }
 
 export interface TransitionSpec {
@@ -105,6 +116,18 @@ export interface TextsConfig {
   /** posisi teks part/episode: geser horizontal/vertikal % layar */
   partX?: number;
   partY?: number;
+  /** v1.4.3: posisi vertikal blok JUDUL+DESKRIPSI saat video berjalan:
+   * 0 = paling atas, 100 = paling bawah (default 100 — di bawah) */
+  titleV?: number;
+  /** v1.4.3: posisi vertikal teks PART/EPISODE saat video berjalan:
+   * 0 = paling atas, 100 = paling bawah (default 0 — di atas) */
+  partV?: number;
+  /** v1.4.3: bingkai judul — id dari TITLE_FRAMES ("" = tanpa bingkai) */
+  titleFrame?: string;
+  /** v1.4.3: skala LEBAR bingkai judul (0.6–2.5; 1 = otomatis ikut tulisan) */
+  titleFrameW?: number;
+  /** v1.4.3: skala TINGGI bingkai judul (0.6–2.5; 1 = otomatis ikut tulisan) */
+  titleFrameH?: number;
 }
 
 /** v1.0.19: gaya bingkai di sekeliling gambar cover — dipilih manual pengguna */

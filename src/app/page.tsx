@@ -143,13 +143,16 @@ export default function Home() {
       const raw = localStorage.getItem("kolosalcut.tuned");
       if (!raw) return;
       const t = JSON.parse(raw) as { quality?: string; parallel?: number };
+      // v1.4.3: setelan OPTIMALKAN lama yang masih default 2 dinaikkan ke 4 —
+      // export & split kini 2x lebih cepat; anggaran RAM tetap menjaga memori
+      const tunedParallel = Number(t.parallel) === 2 ? 4 : Number(t.parallel);
       setSettings((s) => ({
         ...s,
         ...(t.quality === "fast" || t.quality === "balanced" || t.quality === "high"
           ? { quality: t.quality as Settings["quality"] }
           : {}),
-        ...(PARALLEL_OPTIONS.includes(Number(t.parallel) as Settings["parallel"])
-          ? { parallel: Number(t.parallel) as Settings["parallel"] }
+        ...(PARALLEL_OPTIONS.includes(tunedParallel as Settings["parallel"])
+          ? { parallel: tunedParallel as Settings["parallel"] }
           : {}),
       }));
     } catch {

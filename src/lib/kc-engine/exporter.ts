@@ -61,6 +61,14 @@ function clampOffPct(v: number | undefined): number {
   return Math.max(-45, Math.min(45, n)) / 100;
 }
 
+/** v1.4.3: posisi vertikal langsung (% layar 0..100) -> fraksi 0..1.
+ * Setelan lama tanpa nilai otomatis memakai default (judul = 100 bawah,
+ * part = 0 atas) sesuai posisi bawaan baru. */
+function clampV(v: number | undefined, def: number): number {
+  const n = typeof v === "number" && isFinite(v) ? Math.round(v) : def;
+  return Math.max(0, Math.min(100, n)) / 100;
+}
+
 // ============================================================
 // KolosalCut v1.4.0 — jembatan gaya teks KolosalCut (posisi bebas 0..1)
 // ============================================================
@@ -458,9 +466,11 @@ export function buildSplitProject(
           pos: "bottom",
           bg: "bar",
           stroke: true,
-          // posisi dari kolom geser Part di menu Teks
+          // v1.4.3: posisi vertikal part — 0 = paling atas (DEFAULT),
+          // 100 = paling bawah, bisa digeser bebas dari menu Posisi Vertikal
+          posV: clampV(st.texts.partV, 0),
+          // posisi dari kolom geser Part di menu Teks (horizontal)
           offX: clampOffPct(st.texts.partX),
-          offY: clampOffPct(st.texts.partY),
         },
       })
     );
@@ -488,9 +498,16 @@ export function buildSplitProject(
           pos: "top",
           bg: "none",
           stroke: true,
-          // posisi dari kolom geser Judul & Deskripsi di menu Teks
+          // v1.4.3: posisi vertikal judul+deskripsi — 100 = paling bawah
+          // (DEFAULT), 0 = paling atas, bisa digeser bebas dari menu Teks
+          posV: clampV(st.texts.titleV, 100),
+          // v1.4.3: bingkai judul (10 gaya) — ukuran otomatis ikut tulisan
+          // + skala manual dari menu BINGKAI JUDUL
+          frame: st.texts.titleFrame || undefined,
+          frameW: st.texts.titleFrameW,
+          frameH: st.texts.titleFrameH,
+          // posisi dari kolom geser Judul di menu Teks (horizontal)
           offX: clampOffPct(st.texts.titleX),
-          offY: clampOffPct(st.texts.titleY),
           subOffX: clampOffPct(st.texts.descX),
           subOffY: clampOffPct(st.texts.descY),
         },

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>
+  body { margin:0; background:#202028; font-family:sans-serif; }
+  .grid { display:grid; grid-template-columns:repeat(4, 260px); gap:10px; padding:10px; }
+  .cell { background:#000; border-radius:8px; overflow:hidden; }
+  canvas { display:block; width:260px; height:462px; }
+  .lbl { color:#9fb4d8; font-size:11px; padding:3px 7px; background:#111118; }
+</style></head>
+<body>
+<div class="grid" id="g"></div>
+<script src="./engine.module.js"></script>
+<script>
+// Uji 8 kasus POSISI VERTIKAL (posV) KolosalCut v1.4.3 — lewat drawTextOverlay ASLI
+const cases = [
+  { lbl: "1 DEFAULT: judul BAWAH (100) + part ATAS (0)", titleV: 1.0, partV: 0.0, frame: "" },
+  { lbl: "2 judul digeser ATAS (0) + part BAWAH (100)", titleV: 0.0, partV: 1.0, frame: "" },
+  { lbl: "3 judul TENGAH (50) tanpa bingkai", titleV: 0.5, partV: 0.2, frame: "" },
+  { lbl: "4 judul BAWAH + bingkai t4 (auto ikut tulisan)", titleV: 1.0, partV: 0.0, frame: "t4" },
+  { lbl: "5 judul PALING ATAS + bingkai f1 — utuh tak terpotong", titleV: 0.0, partV: 1.0, frame: "f1" },
+  { lbl: "6 judul BAWAH + bingkai t1 skala manual 1.8x", titleV: 1.0, partV: 0.0, frame: "t1", frameW: 1.8, frameH: 1.8 },
+  { lbl: "7 judul ATAS + bingkai t5 tinggi 0.7x lebar 1.4x", titleV: 0.05, partV: 0.95, frame: "t5", frameW: 1.4, frameH: 0.7 },
+  { lbl: "8 judul BAWAH + bingkai f2 (glow) + desc panjang", titleV: 1.0, partV: 0.0, frame: "f2", longDesc: true },
+];
+const g = document.getElementById("g");
+const W = 1080, H = 1920;
+for (const c of cases) {
+  const cell = document.createElement("div");
+  cell.className = "cell";
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const lbl = document.createElement("div");
+  lbl.className = "lbl"; lbl.textContent = c.lbl;
+  cell.appendChild(cv); cell.appendChild(lbl);
+  g.appendChild(cell);
+
+  const ctx = cv.getContext("2d");
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,"#26466e"); bg.addColorStop(0.55,"#3d2f63"); bg.addColorStop(1,"#0b0d14");
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = "rgba(255,196,88,0.9)";
+  ctx.beginPath(); ctx.arc(W*0.7, H*0.3, H*0.16, 0, Math.PI*2); ctx.fill();
+
+  // blok JUDUL+DESKRIPSI (posV judul)
+  NovaDraw.drawTextOverlay(ctx, W, H, {
+    content: "JUDUL VIDEO UJI",
+    sub: c.longDesc ? "Deskripsi panjang pengganti baris kedua yang harus tetap terbaca" : undefined,
+    size: 0.042,
+    subSize: 0.026,
+    color: "#ffffff",
+    font: "condensed",
+    subFont: "condensed",
+    anim: "fade",
+    pos: "top",
+    bg: "none",
+    stroke: true,
+    posV: c.titleV,
+    frame: c.frame,
+    frameW: c.frameW ?? 1,
+    frameH: c.frameH ?? 1,
+  }, 10, 0.2, 12);
+  // teks PART/EPISODE (posV part)
+  NovaDraw.drawTextOverlay(ctx, W, H, {
+    content: "EPISODE 2/30",
+    size: 0.052,
+    color: "#ffffff",
+    font: "condensed",
+    anim: "slam",
+    pos: "bottom",
+    bg: "bar",
+    stroke: true,
+    posV: c.partV,
+  }, 10, 0.2, 12);
+}
+document.title = "DONE";
+</script>
+</body>
+</html>

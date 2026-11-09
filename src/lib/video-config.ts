@@ -7,6 +7,8 @@ import {
   isValidEffect,
   getCoverTemplate,
 } from "@/lib/novacut-fx";
+// v1.4.3: validasi id bingkai judul & skala ukurannya (anti nilai aneh)
+import { saneFrameScale, saneTitleFrame } from "@/lib/kc-engine/titleFrames";
 
 // v1.3.5: "off" = EKSPORT SAJA (ala NOVACUT) — tiap video jadi 1 file utuh
 export type SplitMode = "off" | "duration" | "parts";
@@ -43,8 +45,8 @@ export const ENGINE_INFO: Record<EngineKey, { label: string; desc: string }> = {
 };
 
 /** jumlah video yang dirender serentak */
-export type ParallelKey = 1 | 2 | 3 | 5 | 7;
-export const PARALLEL_OPTIONS: ParallelKey[] = [1, 2, 3, 5, 7];
+export type ParallelKey = 1 | 2 | 3 | 4 | 5 | 7;
+export const PARALLEL_OPTIONS: ParallelKey[] = [1, 2, 3, 4, 5, 7];
 
 // ============================================================
 // TEKS OTOMATIS (v1.3.3) — suara → teks via Whisper (offline)
@@ -261,7 +263,9 @@ export interface TextElement {
   text: string;
   /** posisi horizontal pusat teks 0..1 — digeser bebas via drag pad / kanvas pratinjau */
   relX: number;
-  /** posisi vertikal atas teks 0..1 — digeser bebas via drag pad / kanvas pratinjau */
+  /** v1.4.3: posisi vertikal PUSAT teks 0..1 — digeser bebas via drag pad,
+   * kanvas pratinjau & slider POSISI VERTIKAL (judul default 0.955 = bawah,
+   * part default 0.055 = atas) — sama persis dgn hasil export & split */
   relY: number;
   /** ukuran font pada kanvas 1080px */
   size: number;
@@ -323,6 +327,12 @@ export interface Settings {
   title: TextElement;
   label: LabelElement;
   desc: TextElement;
+  /** v1.4.3: bingkai judul di dalam video (id dari TITLE_FRAMES; "" = tanpa) */
+  titleFrame: string;
+  /** v1.4.3: skala LEBAR bingkai judul (0.6–2.5; 1 = otomatis ikut tulisan) */
+  titleFrameW: number;
+  /** v1.4.3: skala TINGGI bingkai judul (0.6–2.5; 1 = otomatis ikut tulisan) */
+  titleFrameH: number;
   /** gaya frame overlay (neon / minimalis) */
   frame: FrameStyleKey;
   bars: boolean;
@@ -384,7 +394,9 @@ export const DEFAULT_SETTINGS: Settings = {
     enabled: true,
     text: "",
     relX: 0.5,
-    relY: 0.055,
+    // v1.4.3: judul + deskripsi DEFAULT di PALING BAWAH (bisa digeser sampai
+    // paling atas lewat slider Posisi Vertikal / drag pratinjau)
+    relY: 0.955,
     size: 58,
     font: "anton",
   },
@@ -394,7 +406,9 @@ export const DEFAULT_SETTINGS: Settings = {
     prefix: "BAGIAN KE-{n}",
     text: "",
     relX: 0.5,
-    relY: 0.14,
+    // v1.4.3: teks part/episode DEFAULT di PALING ATAS (bisa digeser sampai
+    // paling bawah lewat slider Posisi Vertikal / drag pratinjau)
+    relY: 0.055,
     size: 44,
     font: "montserrat",
   },
@@ -407,6 +421,10 @@ export const DEFAULT_SETTINGS: Settings = {
     font: "carlito",
   },
   frame: "neon-emas",
+  // v1.4.3: bingkai judul mati secara bawaan — pengguna memilih 10 gaya di menu Teks
+  titleFrame: "",
+  titleFrameW: 1,
+  titleFrameH: 1,
   bars: true,
   barSize: "sedang",
   // v1.4.2: gaya cover NOVACUT aktif bawaan — judul atas + deskripsi·episode sebaris
@@ -417,10 +435,9 @@ export const DEFAULT_SETTINGS: Settings = {
   // v1.3.5: posisi vertikal bawaan = tengah, konsisten dgn panX
   panY: 0.5,
   quality: "balanced",
-  // v1.3.2: default 2× — antrean panjang (mis. 50 video) hanya memproses
-  // 2 video serentak; selesai satu, langsung lanjut antrean berikutnya.
-  // Aman untuk PC, render tetap mengalir tanpa jeda menunggu pasangan.
-  parallel: 2,
+  // v1.4.3: default naik 2 -> 4 — export & split KINI 2x lebih cepat
+  // (bagian-bagian dirender serentak; anggaran RAM tetap menjaga memori)
+  parallel: 4,
   outputDir: "",
   // v1.3.3: teks otomatis MATI secara bawaan — pengguna memilih per video
   // v1.3.4: posY 0.75 = zona subtitle khas reels (sedikit di bawah tengah)
@@ -591,6 +608,10 @@ export function sanitizeSettings(raw: unknown): Settings {
     title: pickText(r.title, d.title),
     label,
     desc: pickText(r.desc, d.desc),
+    // v1.4.3: bingkai judul — id divalidasi ke daftar 10 gaya, skala 0.6–2.5
+    titleFrame: saneTitleFrame(r.titleFrame ?? d.titleFrame),
+    titleFrameW: saneFrameScale(r.titleFrameW ?? d.titleFrameW),
+    titleFrameH: saneFrameScale(r.titleFrameH ?? d.titleFrameH),
     frame,
     bars: typeof r.bars === "boolean" ? r.bars : d.bars,
     // v1.4.2: gaya cover NOVACUT (judul atas + deskripsi·episode sebaris)

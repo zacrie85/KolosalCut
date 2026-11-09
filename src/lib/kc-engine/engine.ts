@@ -5,6 +5,7 @@ import { getMusicBuffer, musicDefById } from "./music";
 import { useEditor, totalDuration, type EditorState } from "./store";
 import { drawKcOverlay } from "./kc-overlays";
 import { wrapCanvasText } from "./textwrap";
+import { drawTitleFrameCached, saneFrameScale, saneTitleFrame } from "./titleFrames";
 import type { Clip, MediaAsset, TextData, Track } from "./types";
 import { applyGradeTints, applyOverlays, applyTransition, clipTransform, drawCover, easeOut, framingLayout, gradeFilterString } from "./visual";
 
@@ -74,16 +75,21 @@ export function drawTextOverlay(
   const computeLayout = (sz: number) => {
     ctx.font = `900 ${sz}px ${fontStack(td.font)}`;
     const ls = wrapCanvasText(ctx, content, maxW);
+    // v1.4.3: ukur lebar blok tulisan (baris terlebar) — dipakai untuk
+    // menghitung ukuran bingkai judul yang mengikuti panjang & lebar tulisan
+    let textW = 0;
+    for (const l of ls) textW = Math.max(textW, ctx.measureText(l).width);
     // ukuran & font baris kedua (deskripsi) bisa diatur sendiri (menu Teks)
     const subSz = td.subSize && td.subSize > 0 ? td.subSize * h : sz * 0.42;
     let subs: string[] = [];
     if (td.sub) {
       ctx.font = `600 ${subSz}px ${fontStack(td.subFont || "sans")}`;
       subs = wrapCanvasText(ctx, td.sub, maxW);
+      for (const sl of subs) textW = Math.max(textW, ctx.measureText(sl).width);
     }
     const lh = sz * 1.12;
     const bh = ls.length * lh + (subs.length ? subs.length * subSz * 1.3 + subSz * 0.25 : 0);
-    return { ls, subs, subSz, lineH: lh, blockH: bh };
+    return { ls, subs, subSz, lineH: lh, blockH: bh, textW };
   };
   let size = td.size * h;
   let layout = computeLayout(size);
@@ -95,8 +101,18 @@ export function drawTextOverlay(
   ctx.font = `900 ${size}px ${fontStack(td.font)}`;
   // geser posisi vertikal (kolom posisi di menu Teks) — latar bar ikut bergeser
   const offY = clampOff(td.offY) * h;
-  const posYBase = td.pos === "top" ? h * 0.16 + blockH / 2 : td.pos === "center" ? h / 2 : h * 0.86 - blockH / 2;
-  const posY = posYBase + offY;
+  // v1.4.3: posisi vertikal LANGSUNG (posV: 0 = paling atas, 1 = paling
+  // bawah) — dipakai menu Posisi Vertikal baru; bila tidak ada, pakai pos lama
+  const posV = typeof td.posV === "number" && isFinite(td.posV) ? Math.max(0, Math.min(1, td.posV)) : null;
+  const posYBase = posV !== null ? posV * h : td.pos === "top" ? h * 0.16 + blockH / 2 : td.pos === "center" ? h / 2 : h * 0.86 - blockH / 2;
+  let posY = posYBase + offY;
+  // v1.4.3: di ujung slider (paling atas/bawah), blok tetap UTUH terlihat —
+  // tepi blok (termasuk bingkai) menempel di tepi layar, tidak terpotong.
+  if (posV !== null) {
+    const frH = td.frame ? Math.max(size * 1.7, (blockH + size * 0.84) * saneFrameScale(td.frameH)) : 0;
+    const half = Math.max(blockH / 2, frH / 2) + size * 0.12;
+    posY = Math.min(Math.max(posY, half), h - half);
+  }
 
   switch (td.anim) {
     case "rise":
@@ -154,6 +170,26 @@ export function drawTextOverlay(
       g.addColorStop(1, "rgba(0,0,0,0.9)");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  // v1.4.3: BINGKAI JUDUL — digambar SEBELUM tulisan (teks berada di atas
+  // bingkai), interior kosong sehingga video terlihat di dalamnya. Bingkai
+  // ikut geser horizontal (offX) & animasi (skala/dy) persis seperti teks.
+  // Ukuran otomatis mengikuti panjang & lebar tulisan + skala manual (menu).
+  // Digambar lewat raster cache (drawTitleFrameCached) agar 30fps tetap enteng.
+  if (td.frame) {
+    const frId = saneTitleFrame(td.frame);
+    if (frId) {
+      const offXf = clampOff(td.offX) * w;
+      ctx.save();
+      ctx.translate(offXf, 0);
+      const padX = size * 0.85;
+      const padY = size * 0.42;
+      const fw = Math.max(size * 1.6, (layout.textW + padX * 2) * saneFrameScale(td.frameW));
+      const fh = Math.max(size * 1.7, (blockH + padY * 2) * saneFrameScale(td.frameH));
+      drawTitleFrameCached(ctx, frId, w / 2 - fw / 2, posY + dy - fh / 2, fw, fh);
+      ctx.restore();
     }
   }
 
@@ -828,8 +864,13 @@ class EditorEngine {
           pos: "top",
           bg: "none",
           stroke: true,
+          // v1.4.3: posisi vertikal langsung (default PALING BAWAH) + bingkai
+          // judul — persis sama dgn hasil export & split (satu jalur gambar)
+          posV: (typeof texts.titleV === "number" ? texts.titleV : 100) / 100,
+          frame: texts.titleFrame || undefined,
+          frameW: texts.titleFrameW,
+          frameH: texts.titleFrameH,
           offX: pct(texts.titleX),
-          offY: pct(texts.titleY),
           subOffX: pct(texts.descX),
           subOffY: pct(texts.descY),
         },
@@ -853,8 +894,9 @@ class EditorEngine {
           pos: "bottom",
           bg: "bar",
           stroke: true,
+          // v1.4.3: posisi vertikal part — default PALING ATAS (geser bebas)
+          posV: (typeof texts.partV === "number" ? texts.partV : 0) / 100,
           offX: pct(texts.partX),
-          offY: pct(texts.partY),
         },
         10,
         t,

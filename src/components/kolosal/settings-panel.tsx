@@ -75,7 +75,10 @@ import {
   Upload,
   Eraser,
   Frame,
+  MoveVertical,
 } from "lucide-react";
+// v1.4.3: pemilih bingkai judul (10 gaya, interior kosong)
+import { TitleFramePicker } from "@/components/kolosal/TitleFramePicker";
 
 type SettingsTab = "video" | "teks" | "gaya" | "efek" | "cover";
 
@@ -1022,6 +1025,124 @@ export function SettingsPanel({
           (dipisah &quot;·&quot;) tepat di bawah judul — sama seperti cover di NOVACUT.
           Matikan untuk mengatur posisi tiap teks secara bebas seperti biasa.
         </p>
+      </Section>
+
+      {/* ===== v1.4.3: POSISI VERTIKAL ===== */}
+      <Section num="05" icon={<MoveVertical className="w-4 h-4" />} title="Posisi Vertikal (Geser Atas ↔ Bawah)">
+        <p className="text-[11px] text-zinc-500 leading-snug">
+          Judul &amp; deskripsi <b className="text-cyan-300">mulai di PALING BAWAH</b>, part/episode{" "}
+          <b className="text-cyan-300">mulai di PALING ATAS</b> — geser slidernya sampai ke ujung
+          sebaliknya sesuka hatimu. Tulisan tetap utuh, tidak terpotong tepi layar.
+        </p>
+        {([
+          {
+            key: "title" as const,
+            name: "Judul+Desc",
+            value: Math.round(s.title.relY * 100),
+            def: 96,
+            el: s.title,
+          },
+          {
+            key: "label" as const,
+            name: "Part/Eps",
+            value: Math.round(s.label.relY * 100),
+            def: 6,
+            el: s.label,
+          },
+        ]).map((row) => {
+          const ket = row.value <= 20 ? "Atas" : row.value >= 80 ? "Bawah" : `${row.value}%`;
+          return (
+            <div key={row.key} className="flex items-center gap-2">
+              <span className="w-[72px] shrink-0 text-xs text-zinc-300">{row.name}</span>
+              <span className="w-10 shrink-0 text-center font-tech text-[9px] tracking-[0.14em] text-zinc-500">ATAS</span>
+              <Slider
+                value={[row.value]}
+                min={0}
+                max={100}
+                step={1}
+                disabled={disabled}
+                aria-label={`Posisi vertikal ${row.name}`}
+                onValueChange={(v) =>
+                  onChange({ [row.key]: { ...row.el, relY: Math.max(0.01, Math.min(0.99, v[0] / 100)) } } as Partial<Settings>)
+                }
+                className="flex-1"
+              />
+              <span className="w-10 shrink-0 text-center font-tech text-[9px] tracking-[0.14em] text-zinc-500">BAWAH</span>
+              <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-cyan-300">
+                {row.value === row.def ? "Default" : ket}
+              </span>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() =>
+                  onChange({ [row.key]: { ...row.el, relY: row.key === "title" ? 0.955 : 0.055 } } as Partial<Settings>)
+                }
+                className="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+                aria-label={`Reset posisi ${row.name}`}
+                title={`Reset posisi ${row.name} ke posisi bawaan`}
+              >
+                <RotateCcw className="h-3 w-3" />
+              </button>
+            </div>
+          );
+        })}
+      </Section>
+
+      {/* ===== v1.4.3: BINGKAI JUDUL (10 GAYA) ===== */}
+      <Section num="06" icon={<Frame className="w-4 h-4" />} title="Bingkai Judul (10 Gaya — Interior Kosong)">
+        <p className="text-[11px] text-zinc-500 leading-snug">
+          Pilih bingkai untuk tulisan judul di dalam video: <b className="text-amber-300">6 gaya referensi</b> +{" "}
+          <b className="text-amber-300">4 futuristik</b>. Bagian dalam bingkai <b className="text-zinc-400">kosong</b> —
+          video tetap terlihat. Besar bingkai <b className="text-cyan-300">otomatis mengikuti panjang &amp; lebar tulisan</b>,
+          atau atur sendiri lewat slider di bawah.
+        </p>
+        <TitleFramePicker
+          value={s.titleFrame}
+          disabled={disabled}
+          onChange={(id) => onChange({ titleFrame: id })}
+        />
+        <div className={`flex items-center gap-3 ${s.titleFrame ? "" : "pointer-events-none opacity-40"}`}>
+          <Label className="text-xs text-zinc-400 shrink-0">Lebar</Label>
+          <Slider
+            value={[Math.round(s.titleFrameW * 100)]}
+            min={60}
+            max={250}
+            step={5}
+            disabled={disabled || !s.titleFrame}
+            aria-label="Lebar bingkai judul"
+            onValueChange={(v) => onChange({ titleFrameW: v[0] / 100 })}
+            className="flex-1"
+          />
+          <span className="w-14 text-right text-[11px] tabular-nums text-cyan-300">
+            {s.titleFrameW === 1 ? "Otomatis" : `${s.titleFrameW.toFixed(2)}x`}
+          </span>
+        </div>
+        <div className={`flex items-center gap-3 ${s.titleFrame ? "" : "pointer-events-none opacity-40"}`}>
+          <Label className="text-xs text-zinc-400 shrink-0">Tinggi</Label>
+          <Slider
+            value={[Math.round(s.titleFrameH * 100)]}
+            min={60}
+            max={250}
+            step={5}
+            disabled={disabled || !s.titleFrame}
+            aria-label="Tinggi bingkai judul"
+            onValueChange={(v) => onChange({ titleFrameH: v[0] / 100 })}
+            className="flex-1"
+          />
+          <span className="w-14 text-right text-[11px] tabular-nums text-cyan-300">
+            {s.titleFrameH === 1 ? "Otomatis" : `${s.titleFrameH.toFixed(2)}x`}
+          </span>
+          <button
+            type="button"
+            disabled={disabled || !s.titleFrame || (s.titleFrameW === 1 && s.titleFrameH === 1)}
+            onClick={() => onChange({ titleFrameW: 1, titleFrameH: 1 })}
+            className="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Reset ukuran bingkai ke otomatis"
+            title="Kembalikan ukuran bingkai ke otomatis (ikut tulisan)"
+          >
+            <RotateCcw className="h-3 w-3" />
+          </button>
+        </div>
       </Section>
       </>
       )}
