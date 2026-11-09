@@ -319,6 +319,61 @@ export interface TurboSegmentOptions {
   onStage?: (label: string) => void;
   /** v1.0.17: label tahap audio (utk UI) */
   audioCopy?: boolean;
+  /** v1.4.5 INTERNAL: paksa konfigurasi encoder hasil ukur kecepatan
+   * (dipakai pembungkus saat percobaan pertama terbukti lambat) */
+  forceEnc?: { codec: string; hw?: VideoEncoderConfig["hardwareAcceleration"] };
+  /** v1.4.5: lapor kecepatan render terukur (kali realtime) — utk badge UI */
+  onSpeed?: (mult: number) => void;
+}
+
+// ===== v1.4.5 — PENJAGA KECEPATAN TURBO (bukti nyata, bukan janji probe) =====
+// VideoEncoder.isConfigSupported TIDAK BISA dipercaya untuk membedakan GPU/CPU:
+// dgn hardwareAcceleration "prefer-hardware" Chromium menjawab supported=true
+// WALAUPUN nanti diam-diam memakai OpenH264 SOFTWARE (hint diabaikan bila GPU
+// menolak profil/resolusi). Software encode 1080x1920 = 10-20 fps = 0,3-0,6x
+// realtime → film 90 menit selesai 4-9 JAM (kasus nyata pengguna). NOVACUT
+// Studio v1.0.22 lolos dari ini karena probe 720p + codec Baseline L3.1 TANPA
+// hint hardware → konfigurasi default Chromium jatuh ke encoder GPU D3D11.
+// Kini Turbo MENGUKUR kecepatan loop penuh (decode+compose+encode) pada 60
+// frame pertama; kalau < 1,2x realtime, bagian diulang dgn konfigurasi
+// "terbukti NOVACUT" (Baseline dulu, TANPA hint) — dicache seisi sesi.
+
+type TurboEncCfg = { codec: string; hw?: VideoEncoderConfig["hardwareAcceleration"] };
+
+/** konfigurasi encoder tercepat yang TERBUKTI oleh pengukuran nyata
+ * undefined = belum diuji | null = tak ada alternatif (jangan coba lagi) */
+let turboFastEnc: TurboEncCfg | null | undefined;
+
+class TurboSlowSignal extends Error {
+  constructor(public rate: number) {
+    super(`Turbo lambat: ${rate.toFixed(1)} fps`);
+  }
+}
+
+/** Pilih konfigurasi encoder alternatif — tangga yang PERSIS dipakai NOVACUT
+ * Studio v1.0.22 (terbukti 24 mnt utk film 90 mnt di PC pengguna): Baseline
+ * L3.1 dulu, TANPA hardwareAcceleration (default Chromium = pilih GPU bila ada). */
+async function pickFasterEncoderConfig(w: number, h: number, bitrate: number, framerate: number): Promise<TurboEncCfg | null> {
+  if (turboFastEnc !== undefined) return turboFastEnc;
+  const ladder = [
+    "avc1.42E01E", // Baseline L3.1 — persis jalur NOVACUT v1.0.22
+    "avc1.42E028", // Baseline L4.0
+    "avc1.4D0028", // Main L4.0
+    "avc1.640028", // High L4.0
+  ];
+  for (const codec of ladder) {
+    try {
+      const s = await VideoEncoder.isConfigSupported({ codec, width: w, height: h, bitrate, framerate });
+      if (s.supported) {
+        turboFastEnc = { codec };
+        return turboFastEnc;
+      }
+    } catch {
+      /* coba kandidat berikutnya */
+    }
+  }
+  turboFastEnc = null;
+  return null;
 }
 
 export interface TurboSegmentResult {
@@ -331,8 +386,24 @@ export interface TurboSegmentResult {
   size?: number;
 }
 
-/** Render satu bagian (rentang timeline) dengan mesin Turbo — MP4 saja. */
+/** Render satu bagian (rentang timeline) dengan mesin Turbo — MP4 saja.
+ * v1.4.5: dibungkus penjaga kecepatan — bila percobaan pertama terbukti lambat
+ * (OpenH264 software), bagian diulang otomatis dgn konfigurasi terbukti NOVACUT. */
 export async function exportSegmentTurbo(opts: TurboSegmentOptions): Promise<TurboSegmentResult> {
+  try {
+    return await turboSegmentOnce(opts, opts.forceEnc);
+  } catch (e) {
+    if (!(e instanceof TurboSlowSignal) || opts.forceEnc) throw e;
+    const { rs } = opts;
+    const alt = await pickFasterEncoderConfig(rs.project.width, rs.project.height, opts.bitrate, opts.fps ?? 30);
+    if (!alt) throw e;
+    console.warn(`Turbo: encoder probe ternyata LAMBAT (${e.rate.toFixed(1)} fps) — ulang dgn ${alt.codec} (jalur terbukti NOVACUT)`);
+    return await turboSegmentOnce({ ...opts, forceEnc: alt }, alt);
+  }
+}
+
+/** Satu percobaan render bagian Turbo (konfigurasi encoder = forceEnc ?? probe). */
+async function turboSegmentOnce(opts: TurboSegmentOptions, forceEnc?: TurboEncCfg): Promise<TurboSegmentResult> {
   const support = await fastSupported();
   if (!support || support.container !== "mp4") throw new Error("Mesin Turbo memerlukan encoder MP4 (H.264)");
   await ensureAppFonts();
@@ -444,14 +515,16 @@ export async function exportSegmentTurbo(opts: TurboSegmentOptions): Promise<Tur
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta as never),
     error: (e) => console.error("Turbo VideoEncoder:", e),
   });
+  // v1.4.5: konfigurasi encoder = hasil UKUR NYATA (forceEnc) bila ada,
+  // bukan lagi janji probe (isConfigSupported tak bisa membedakan GPU/CPU)
+  const encCfg: TurboEncCfg = forceEnc ?? { codec: support.videoCodec, hw: support.hw };
   encoder.configure({
-    codec: support.videoCodec,
+    codec: encCfg.codec,
     width: w,
     height: h,
     bitrate: opts.bitrate,
     framerate: fps,
-    // v1.4.2: pakai persis preferensi yang TERBUKTI oleh probe (GPU bila ada)
-    ...(support.hw ? { hardwareAcceleration: support.hw } : {}),
+    ...(encCfg.hw ? { hardwareAcceleration: encCfg.hw } : {}),
     ...(support.videoMuxCodec === "avc" ? { avc: { format: "avc" as const } } : {}),
   });
 
@@ -501,6 +574,11 @@ export async function exportSegmentTurbo(opts: TurboSegmentOptions): Promise<Tur
     }
   };
 
+  // v1.4.5: pengukur kecepatan loop penuh (decode+compose+encode) — frame 8
+  // dilewati sebagai pemanasan (buka decoder/kanvas/font), frame 8→68 = 60
+  // frame utk ukur. Lambat → lempar TurboSlowSignal → pembungkus exportSegment
+  // Turbo mengulang dgn konfigurasi terbukti NOVACUT (GPU bila ada).
+  let speedT0 = 0;
   try {
     for (let f = 0; f < totalFrames; f++) {
       if (pullErr) throw pullErr; // decode gagal → gagal bersih → fallback mesin kilat
@@ -539,7 +617,32 @@ export async function exportSegmentTurbo(opts: TurboSegmentOptions): Promise<Tur
       while (encoder.encodeQueueSize > 6) await sleep(2);
       if (buf.length < 4 && !streamDone) await pull();
       emit((f + 1) / totalFrames);
+      // v1.4.5: UKUR KECEPATAN NYATA — probe isConfigSupported tidak bisa
+      // membedakan GPU/CPU; kalau 60 frame pertama < 1,2x realtime dan belum
+      // pernah menemukan konfigurasi cepat, ganti ke tangga terbukti NOVACUT.
+      if (f === 8) speedT0 = performance.now();
+      if (f === 68) {
+        const el = (performance.now() - speedT0) / 1000;
+        const rate = 60 / Math.max(0.05, el);
+        const mult = rate / fps;
+        try {
+          opts.onSpeed?.(mult);
+        } catch {
+          /* lapor kecepatan tak boleh menggagalkan render */
+        }
+        if (mult < 1.2 && !forceEnc && turboFastEnc === undefined) throw new TurboSlowSignal(rate);
+      }
     }
+  } catch (e) {
+    // v1.4.5: batal menulis file setengah jadi sebelum diulang (TurboSlowSignal)
+    if (writer) {
+      try {
+        await writer.abort();
+      } catch {
+        /* biarkan — file parsial akan tertimpa percobaan berikutnya */
+      }
+    }
+    throw e;
   } finally {
     await gen.return(undefined as never).catch(() => undefined); // tutup decoder + sisa frame
     for (const b of buf) b.frame.close(); // sisa buffer tidak boleh bocor

@@ -1065,6 +1065,10 @@ export async function runBatchExport(assetIds: string[]) {
 
     // ========== FASE 2 — RENDER ==========
     const jobProgress = new Array(jobs.length).fill(0) as number[];
+    // v1.4.5: badge mesin per film — TAMPIL TERUS di baris status sehingga
+    // pengguna selalu tahu mesin apa yang bekerja & seberapa cepat:
+    // "TURBO 8.4x" (GPU) / "TURBO CPU 0.7x" (lambat) / "KILAT (alasan)"
+    const jobBadge = new Map<string, string>();
     /** v1.0.17: film yang SEDANG berjalan (prep/segmen) — elemen medianya tidak
      * ikut dibersihkan. Elemen video kini hanya dibuat jalur kompatibel & fallback;
      * mesin Turbo bekerja tanpa elemen <video> sama sekali. */
@@ -1313,6 +1317,9 @@ export async function runBatchExport(assetIds: string[]) {
         });
       } else if (chk.reason) {
         markJob(jid, { label: `Mode kilat (Turbo mati: ${chk.reason})` });
+        // v1.4.5: alasan ditempel permanen di badge baris — dulu label ini
+        // langsung tertimpa label bagian sehingga pengguna tak pernah tahu
+        jobBadge.set(jid, `KILAT (${chk.reason})`);
       }
       // antrekan bagian yang belum ada filenya — SATU ANTREAN UNTUK SEMUA FILM
       for (let i = 0; i < ranges.length; i++) {
@@ -1330,6 +1337,11 @@ export async function runBatchExport(assetIds: string[]) {
       const total = pr.ranges.length;
       const partTxt = kcPartLabel(pl.labelStyle, i + 1, total, true);
       const tick = makeTick();
+      // v1.4.5: badge mesin ditempel di SEMUA label bagian agar tak tertimpa
+      const badge = () => {
+        const b = jobBadge.get(jid);
+        return b ? ` · ${b}` : "";
+      };
       if (!renderT0) renderT0 = performance.now(); // v1.4.4: ETA mulai dari render pertama
       // v1.4.0: video dibatalkan pengguna — lewati tanpa merender
       if (kcCancelled(jid)) {
@@ -1342,7 +1354,7 @@ export async function runBatchExport(assetIds: string[]) {
           batchIndex: vi,
           batchTotal: jobs.length,
         });
-        markJob(jid, { label: total > 1 ? partTxt : "Merender..." });
+        markJob(jid, { label: `${total > 1 ? partTxt : "Merender..."}${badge()}` });
         // cover bagian ini — asset LOKAL + CACHE (tanpa race store antar pekerja)
         let coverAssetId = job.coverAssetId;
         let assets = useEditor.getState().assets;
@@ -1399,11 +1411,24 @@ export async function runBatchExport(assetIds: string[]) {
               audioCache: pr.audio,
               audioCopy: pr.audioCopy,
               onProgress,
+              // v1.4.5: kecepatan terukur tampil permanen di baris status —
+              // pengguna langsung tahu rendernya di-GPU atau di-CPU
+              onSpeed: (mult) => {
+                const b = mult >= 1.2 ? `TURBO ${mult.toFixed(1)}x` : `TURBO CPU ${mult.toFixed(1)}x`;
+                if (jobBadge.get(jid) !== b) {
+                  jobBadge.set(jid, b);
+                  markJob(jid, { label: `${partTxt} · ${b}` });
+                }
+              },
             });
             res = t;
           } catch (e) {
             // Turbo gagal untuk bagian ini — mesin kilat lama mengerjakan bagian ini
             console.warn(`Turbo gagal (${partTxt}) — pakai mesin kilat lama:`, e);
+            // v1.4.5: sebab tampil permanen di badge (termasuk "Turbo lambat" —
+            // berarti tak ada konfigurasi encoder yang lebih cepat di PC ini)
+            const why = (e instanceof Error ? e.message : "error").split("\n")[0].slice(0, 44);
+            jobBadge.set(jid, `KILAT (${why})`);
             res = await exportRangeFast({ start: 0, end: proj.duration, rs, audioCache: pr.audio, bitrate, ...(directSave ? { directSave } : {}), onProgress });
           }
         } else {
