@@ -27,6 +27,37 @@ export async function ensureBaseDirs() {
   await fs.mkdir(EXPORTS_DIR, { recursive: true });
 }
 
+/**
+ * v1.4.9 TANPA UNGGAH — bersihkan salinan upload LAMA (dipakai hanya teks
+ * otomatis versi lama / mode browser). Semua folder di UPLOADS_DIR yang tidak
+ * disentuh lebih dari `maxAgeMs` dibuang (termasuk folder kerja transkrip usang).
+ * Aman terhadap folder yang sedang dipakai (baru saja ditulis = mtime segar).
+ */
+export async function purgeOldUploads(maxAgeMs = 48 * 3600_000): Promise<number> {
+  let removed = 0;
+  try {
+    await fs.mkdir(UPLOADS_DIR, { recursive: true });
+    const entries = await fs.readdir(UPLOADS_DIR);
+    const now = Date.now();
+    for (const name of entries) {
+      const dir = path.join(UPLOADS_DIR, name);
+      try {
+        const st = await fs.stat(dir);
+        if (!st.isDirectory()) continue;
+        if (now - st.mtimeMs > maxAgeMs) {
+          await fs.rm(dir, { recursive: true, force: true });
+          removed++;
+        }
+      } catch {
+        /* satu folder gagal — lanjut yang lain */
+      }
+    }
+  } catch {
+    /* pembersihan gagal — biarkan */
+  }
+  return removed;
+}
+
 export async function probeVideo(p: string): Promise<VideoInfo> {
   const raw = await new Promise<string>((resolve, reject) => {
     const proc = spawn(FFPROBE_BIN, [

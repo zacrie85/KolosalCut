@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UploadZone } from "@/components/kolosal/upload-zone";
 import { ImportZone, MAX_VIDEOS, MAX_SIZE } from "@/components/kolosal/import-zone";
-import { uploadVideo, fmtSize, type UploadResult } from "@/lib/upload-client";
+import { probeLocalVideo, fmtSize, type UploadResult } from "@/lib/upload-client";
 import { PreviewCanvas } from "@/components/kolosal/preview-canvas";
 import { SettingsPanel } from "@/components/kolosal/settings-panel";
 import { ExportPanel } from "@/components/kolosal/export-panel";
@@ -89,14 +89,15 @@ function dirNameOf(p: string): string {
   return i > 0 ? p.slice(0, i) : p;
 }
 
-/** unggah satu file dengan laporan progres (XHR streaming — aman untuk 10GB) */
-function uploadOne(file: File, onProgress: (pct: number) => void): Promise<UploadResult> {
-  return uploadVideo(file, onProgress);
+/** v1.4.9 TANPA UNGGAH — periksa info video SECARA LOKAL (nol salinan ke folder upload).
+ * Durasi/resolusi/audio dibaca langsung dari file — persis cara NOVACUT. */
+function prepareOne(file: File): Promise<UploadResult> {
+  return probeLocalVideo(file);
 }
 
 const STATUS_META: Record<ItemStatus, { label: string; cls: string }> = {
-  mengunggah: { label: "MENGUNGGAH", cls: "text-cyan-200 border-cyan-300/40 bg-cyan-400/10" },
-  "gagal-unggah": { label: "GAGAL UNGGAH", cls: "text-red-300 border-red-400/40 bg-red-500/10" },
+  mengunggah: { label: "MEMERIKSA", cls: "text-cyan-200 border-cyan-300/40 bg-cyan-400/10" },
+  "gagal-unggah": { label: "GAGAL PERIKSA", cls: "text-red-300 border-red-400/40 bg-red-500/10" },
   siap: { label: "SIAP", cls: "text-zinc-300 border-zinc-600 bg-zinc-800/60" },
   antre: { label: "ANTRE", cls: "text-indigo-200 border-indigo-400/40 bg-indigo-500/10" },
   proses: { label: "MERENDER", cls: "text-cyan-200 border-cyan-300/50 bg-cyan-400/15" },
@@ -184,30 +185,28 @@ export default function Home() {
     );
   }, [settings, selectedUid]);
 
-  // ==================== ANTREAN UNGGAH ====================
-  const flushUploads = useCallback(async () => {
+  // ==================== PEMERIKSAAN LOKAL (v1.4.9 TANPA UNGGAH) ====================
+  // Video TIDAK disalin ke folder upload saat diimpor (ala NOVACUT) — info
+  // (durasi/resolusi/audio) diperiksa langsung dari file lokal. Render pun
+  // memakai file lokal; salinan server hanya dibuat bila TEKS OTOMATIS dipakai
+  // di mode browser (desktop membaca file langsung dari path aslinya).
+  const flushPrepares = useCallback(async () => {
     if (uploadLoopRef.current) return;
     uploadLoopRef.current = true;
     try {
       for (;;) {
         const next = itemsRef.current.find(
-          (i) => i.status === "mengunggah" && !i.uploadId && i.file
+          (i) => i.status === "mengunggah" && !i.info && i.file
         );
         if (!next) break;
         try {
-          const res = await uploadOne(next.file!, (pct) => {
-            setItems((prev) =>
-              prev.map((i) => (i.uid === next.uid ? { ...i, uploadProgress: pct } : i))
-            );
-          });
+          const res = await prepareOne(next.file!);
           setItems((prev) =>
             prev.map((i) =>
               i.uid === next.uid
                 ? {
                     ...i,
-                    uploadId: res.uploadId,
                     info: res,
-                    size: res.size,
                     status: "siap",
                     uploadProgress: 100,
                   }
@@ -219,7 +218,7 @@ export default function Home() {
             prev.map((i) => (i.uid === next.uid ? { ...i, status: "gagal-unggah" } : i))
           );
           toast({
-            title: `Gagal unggah: ${next.name}`,
+            title: `Gagal memeriksa: ${next.name}`,
             description: (e as Error).message,
             variant: "destructive",
           });
@@ -230,14 +229,11 @@ export default function Home() {
     }
   }, [toast]);
 
-  // pompa antrean unggah SETELAH daftar ter-commit.
-  // FIX race: dulu flushUploads dipanggil langsung dari addFiles, saat itemsRef
-  // masih berisi daftar lama, sehingga unggahan batch tidak pernah dimulai
-  // (status mentok MENGUNGGAH 0%). Dengan efek ini, setiap item "mengunggah"
-  // dijamin diambil begitu daftar berubah — termasuk unggahan yang sempat nyangkut.
+  // pompa pemeriksaan lokal SETELAH daftar ter-commit — tiap item "mengunggah"
+  // (memeriksa) dijamin diambil begitu daftar berubah, termasuk yang nyangkut.
   useEffect(() => {
-    void flushUploads();
-  }, [items, flushUploads]);
+    void flushPrepares();
+  }, [items, flushPrepares]);
 
   const addFiles = useCallback(
     (files: File[]) => {
@@ -266,6 +262,7 @@ export default function Home() {
           name: f.name,
           size: f.size,
           objectUrl: URL.createObjectURL(f),
+          // v1.4.9: "mengunggah" kini berarti MEMERIKSA LOKAL (nol salinan)
           status: "mengunggah",
           uploadProgress: 0,
           settings: snap,
@@ -281,13 +278,14 @@ export default function Home() {
       if (added.length === 0) return;
       setItems((prev) => [...prev, ...added]);
       if (!selectedRef.current) setSelectedUid(added[0].uid);
-      // pompa unggahan kini lewat efek [items] di atas — tidak dipanggil langsung di sini
+      // pemeriksaan lokal kini lewat efek [items] di atas — tidak dipanggil langsung di sini
       toast({
         title: "Video ditambahkan",
-        description: `${added.length} video masuk antrean & sedang diunggah.`,
+        // v1.4.9: tanpa unggah — hanya diperiksa lokal, penyimpanan tidak bertambah
+        description: `${added.length} video masuk antrean (diperiksa lokal, tanpa disalin).`,
       });
     },
-    [flushUploads, toast]
+    [toast]
   );
 
   const onSingleUploaded = useCallback(
@@ -384,7 +382,7 @@ export default function Home() {
     });
   }, [toast]);
 
-  const readyCount = items.filter((i) => i.uploadId && !i.result && i.status === "siap").length;
+  const readyCount = items.filter((i) => i.info && !i.result && i.status === "siap").length;
   const busyCount = items.filter((i) => i.status === "antre" || i.status === "proses").length;
 
   // ==================== MESIN RENDER NOVACUT (v1.4.0) ====================
@@ -395,7 +393,7 @@ export default function Home() {
     const kc = await getKc();
     if (starting || kc.isKcBatchRunning()) return;
     const ready = itemsRef.current.filter(
-      (i) => i.uploadId && !i.result && i.status === "siap" && i.file
+      (i) => i.info && !i.result && i.status === "siap" && i.file
     );
     if (ready.length === 0) {
       toast({

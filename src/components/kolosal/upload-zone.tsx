@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { UploadCloud, FileVideo, X } from "lucide-react";
 import { fmtDur } from "@/lib/video-config";
-import { uploadVideo, MAX_SIZE, fmtSize, type UploadResult } from "@/lib/upload-client";
+import { probeLocalVideo, MAX_SIZE, fmtSize, type UploadResult } from "@/lib/upload-client";
 import { HudCorners } from "@/components/kolosal/hud";
 
 export type { UploadResult };
@@ -36,9 +36,11 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError, variant }
         onError(`Ukuran video melebihi ${fmtSize(MAX_SIZE)}.`);
         return;
       }
+      // v1.4.9 TANPA UNGGAH: video TIDAK disalin ke server — info diperiksa
+      // lokal lalu langsung siap (ala NOVACUT). Penyimpanan tidak bertambah.
       setBusy(true);
-      setProgress(0);
-      uploadVideo(file, setProgress)
+      setProgress(60);
+      probeLocalVideo(file)
         .then((res) => {
           setBusy(false);
           setProgress(100);
@@ -46,7 +48,7 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError, variant }
         })
         .catch((e: Error) => {
           setBusy(false);
-          onError(e.message || "Gagal mengunggah video.");
+          onError(e.message || "Gagal memeriksa video.");
         });
     },
     [busy, onUploaded, onError]
@@ -139,7 +141,7 @@ export function UploadZone({ uploaded, onUploaded, onCleared, onError, variant }
         <div className="w-full max-w-[240px] flex flex-col gap-1.5">
           <Progress value={progress} className="h-2" />
           <p className="font-tech text-[11px] text-cyan-200/80 tabular-nums">
-            MENGUNGGAH... {progress}%
+            MEMERIKSA VIDEO...
           </p>
         </div>
       ) : (

@@ -153,8 +153,7 @@ export function ExportPanel({
   // "0:00 → ±0 file" (menyesatkan, padahal batch jalan 30 bagian).
   const ready = items.filter(
     (i) =>
-      i.uploadId !== undefined &&
-      i.info &&
+      i.info !== undefined &&
       (i.status === "siap" || i.status === "antre" || i.status === "proses" || i.status === "selesai")
   );
   const estFiles = ready.reduce(

@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import { UPLOADS_DIR, probeVideo } from "@/lib/server/ffmpeg";
+import { UPLOADS_DIR, ensureBaseDirs, probeVideo, purgeOldUploads } from "@/lib/server/ffmpeg";
 import { transcribeVideo, type Transcript } from "@/lib/server/transcribe";
 import type { SubMode } from "@/lib/video-config";
 
@@ -41,35 +41,67 @@ function prune() {
 export async function POST(req: NextRequest) {
   try {
     prune();
+    // v1.4.9: salinan upload lama (dari versi sebelum TANPA UNGGAH) yang sudah
+    // >48 jam tidak terpakai dibuang diam-diam — folder data tetap ramping
+    void ensureBaseDirs().then(() => purgeOldUploads());
     const body = (await req.json().catch(() => ({}))) as {
       uploadId?: string;
+      /** v1.4.9 TANPA UNGGAH: path video ASLI di disk (desktop via webUtils) —
+       * whisper membaca langsung dari situ, NOL salinan ke folder upload */
+      srcPath?: string;
       mode?: SubMode;
     };
-    const uploadId = (body.uploadId || "").replace(/[^a-z0-9]/gi, "").slice(0, 40);
-    if (!uploadId) {
-      return NextResponse.json({ error: "uploadId wajib diisi" }, { status: 400 });
-    }
     const mode: SubMode = (
       ["sangat-cepat", "cepat", "akurat"] as SubMode[]
     ).includes(body.mode as SubMode)
       ? (body.mode as SubMode)
       : "cepat";
 
-    // cari berkas sumber yang sudah diunggah
-    const dir = path.join(UPLOADS_DIR, uploadId);
     let sourceFile: string | null = null;
-    try {
-      const entries = await fs.readdir(dir);
-      const src = entries.find((f) => f.startsWith("source."));
-      if (src) sourceFile = path.join(dir, src);
-    } catch {
-      /* tidak ada */
-    }
-    if (!sourceFile) {
-      return NextResponse.json(
-        { error: "Video sumber tidak ditemukan. Tambahkan ulang videonya." },
-        { status: 404 }
-      );
+    let workDir = "";
+    const rawSrcPath = (body.srcPath || "").trim();
+    if (rawSrcPath) {
+      // ---- TANPA UNGGAH: pakai berkas ASLI di disk (desktop lokal) ----
+      // validasi ketat: path mutlak, ada, berkas biasa, ekstensi video
+      const p = rawSrcPath.slice(0, 600);
+      const okExt = [".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi", ".ts", ".flv"];
+      const ext = path.extname(p).toLowerCase();
+      if (!path.isAbsolute(p) || !okExt.includes(ext)) {
+        return NextResponse.json({ error: "Path video tidak valid." }, { status: 400 });
+      }
+      try {
+        const st = await fs.stat(p);
+        if (!st.isFile()) throw new Error("bukan berkas");
+        sourceFile = p;
+        // folder kerja transkrip tetap di folder data aplikasi (kecil — teks saja)
+        workDir = path.join(UPLOADS_DIR, "work", randomUUID().replace(/-/g, "").slice(0, 12), "transcribe");
+      } catch {
+        return NextResponse.json(
+          { error: "Video sumber tidak dapat diakses dari lokasinya." },
+          { status: 404 }
+        );
+      }
+    } else {
+      // ---- jalur lama: berkas salinan di folder upload ----
+      const uploadId = (body.uploadId || "").replace(/[^a-z0-9]/gi, "").slice(0, 40);
+      if (!uploadId) {
+        return NextResponse.json({ error: "uploadId atau srcPath wajib diisi" }, { status: 400 });
+      }
+      const dir = path.join(UPLOADS_DIR, uploadId);
+      try {
+        const entries = await fs.readdir(dir);
+        const src = entries.find((f) => f.startsWith("source."));
+        if (src) sourceFile = path.join(dir, src);
+      } catch {
+        /* tidak ada */
+      }
+      if (!sourceFile) {
+        return NextResponse.json(
+          { error: "Video sumber tidak ditemukan. Tambahkan ulang videonya." },
+          { status: 404 }
+        );
+      }
+      workDir = path.join(dir, "transcribe");
     }
 
     const info = await probeVideo(sourceFile);
@@ -82,7 +114,6 @@ export async function POST(req: NextRequest) {
     };
     tasks.set(taskId, task);
 
-    const workDir = path.join(dir, "transcribe");
     // jalankan di latar belakang — klien memantau lewat GET
     void transcribeVideo(
       sourceFile,

@@ -1,22 +1,25 @@
-# KolosalCut v1.4.8
+# KolosalCut v1.4.9
 
-LAPORAN ANDA: "video hasil export & split-nya **kedip-kedip**." KETEMU PENYEBABNYA — dan ini bug lama yang baru terasa setelah v1.4.7, karena di PC Anda video dirender **MESIN KILAT** (badge "KILAT (decoder ...)" — kode video sumber tidak didukung dekoder Turbo), dan justru di jalur itulah ada cacat sejak v1.4.0.
+LAPORAN ANDA: "saat mau mengolah video, aplikasi mengunggah/salin videonya dulu ke folder upload-nya sendiri — itu mengisi penuh penyimpanan. Boleh tidak seperti NOVACUT, langsung tanpa diunggah?" BISA — dan versi inilah jawabannya: **TANPA UNGGAH**. Mulai sekarang video Anda **TIDAK DISALIN LAGI** ke folder data aplikasi. Penyimpanan tidak bertambah sama sekali saat mengimpor.
 
-## 1. PENYEBAB KEDIP-KEDIP: 5 BAGIAN PARALEL BERTEMU DI 1 ELEMEN VIDEO 🐞📺
+## 1. SEBELUMNYA UNTUK APA UNGGAH ITU? 🤔
 
-- Saat export & split paralel (5x), **beberapa bagian dirender BERSAMAAN** — dan semuanya berasal dari film yang SAMA.
-- Dulu, semua bagian itu memakai **SATU elemen `<video>` internal yang sama** (elemen disimpan per FILE, bukan per bagian). Akibatnya 5 "pompa decode" saling memutar / melompat-seek / menjeda ELEMEN YANG SAMA ke posisi masing-masing.
-- Frame yang digambar jadi diambil dari **posisi acak film** (kadang dari menit ke-3, tiba-tiba menit ke-40, balik lagi) → saat diputar hasilnya **KEDIP-KEDIP**. Semakin tinggi paralel, semakin parah.
-- Jalur TURBO tidak terkena (tiap bagian punya dekoder WebCodecs sendiri) — makanya bug ini lolos uji lama yang memakai MP4 (selalu Turbo). Di PC Anda yang jatuh ke mesin KILAT, bug-nya keluar semua.
+- Itu warisan mesin lama (sebelum v1.4.0), ketika video benar-benar diproses di server internal aplikasi — videonya memang harus tersalin dulu.
+- Sejak mesin NOVACUT pindah ke aplikasi (render langsung dari file Anda), salinan itu tinggal dipakai SATU hal saja: fitur TEKS OTOMATIS (subtitle AI). Jadi video 1–10 GB disalin utuh hanya demi subtitle — boros sekali. Maaf, kawan!
 
-## 2. PERBAIKAN: TIAP BAGIAN PUNYA ELEMEN VIDEO SENDIRI ✅
+## 2. SEKARANG: LANGSUNG DARI FILE ANDA (PERSIS NOVACUT) ✅
 
-- Kini **setiap bagian yang dirender mendapat elemen `<video>` KHUSUS** untuk dirinya sendiri — pompa decode tidak mungkin saling ganggu lagi, sehebat apa pun paralelnya.
-- Elemen khusus itu **dilepas bersih setelah bagiannya selesai** (dekoder tidak menumpuk antar bagian — jagaan anti layar-hitam lama tetap terjaga).
-- Bonus jagaan: frame yang digambar kini **dipastikan tepat pada waktunya** — kalau decode sedikit meleset, langsung dikoreksi seek presisi (dulu boleh meleset sampai 0,1 dtk = kedipan halus sesekali).
-- Bonus 2: elemen sementara pembuat cover otomatis juga kini dilepas setelah dipakai (dekode rapi dari awal sampai akhir batch).
+- **Impor**: info video (durasi, resolusi, ada audio/tidak) diperiksa **langsung dari file Anda** di tempatnya — tanpa menyalin apa pun. Status "MENGUNGGAH" berganti jadi "MEMERIKSA" (hitungan detik).
+- **Render & split**: memakai file lokal Anda langsung (memang sudah begitu sejak v1.4.0 — kini konsisten sampai ke impor).
+- **Teks otomatis (subtitle AI)**: di aplikasi desktop, whisper membaca video **langsung dari lokasi aslinya** (path asli) — **NOL salinan**.
+- **Mode browser** (buka via web browser biasa, bukan aplikasi): browser tidak boleh tahu path file, jadi salinan dibuat **hanya saat TEKS OTOMATIS dipakai**, dan **otomatis DIHAPUS** begitu subtitle selesai. Tidak ada lagi tumpukan.
+
+## 3. BONUS: BERSIH-BERSIH SALINAN LAMA 🧹
+
+- Salinan-salinan lama dari versi sebelumnya (folder data aplikasi → `uploads`) yang sudah **lebih dari 48 jam** otomatis dibuang saat aplikasi dipakai — folder data menyusut sendiri kembali.
+- Bisa juga bersihkan manual kapan pun lewat menu SISTEM → **BERSIHKAN CACHE** (pilih folder uploads).
 
 ## CATATAN
 
-- **Kecepatan tidak berubah** — mesin Turbo + antrean paralel 5x + anti-mentok-99% tetap persis sama. Ini murni perbaikan kebenaran gambar pada jalur KILAT.
-- Uji: E2E baru khusus jalur KILAT — video uji 12 scene warna (1 dtk per scene, WebM agar Turbo gugur) di-split "Berapa bagian"=4 dengan paralel aktif: hasil **tepat 4 file**, lalu SETIAP frame hasil di-periksa warna+urutannya: bagian ke-1 = scene 0-2, ke-2 = scene 3-5, ke-3 = scene 6-8, ke-4 = scene 9-11, **semua urut, 0 lompatan balik, 0 frame dari posisi salah** (= mustahil kedip). Regresi jalur Turbo (v1.4.7) + mode durasi + 9 tes logika split: semua lulus. tsc bersih, build desktop lulus.
+- Kecepatan, mesin Turbo/Kilat, anti-mentok-99%, anti-kedip: **semua tetap persis sama**.
+- Uji: E2E khusus — impor lewat UI → **0 folder baru** di folder upload (dibuktikan daftar folder sebelum/sesudah) → export & split "Berapa bagian"=4 dari file lokal → **tepat 4 file MP4 H.264** → API teks otomatis menerima path asli & menolak path tidak valid (relatif, non-video, tidak ada) → DELETE salinan sementara ✓ → salinan lama ≥48 jam otomatis terbuang ✓. Regresi E2E anti-kedip v1.4.8: lulus semua. tsc bersih, build desktop lulus.

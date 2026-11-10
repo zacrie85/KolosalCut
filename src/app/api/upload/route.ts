@@ -123,3 +123,25 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+/**
+ * v1.4.9 TANPA UNGGAH — hapus salinan sementara (mode browser) SETELAH teks
+ * otomatis selesai, agar penyimpanan tetap bersih. DELETE /api/upload?id=<id>
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const id = (req.nextUrl.searchParams.get("id") || "").replace(/[^a-z0-9]/gi, "").slice(0, 40);
+    if (!id) {
+      return NextResponse.json({ error: "id wajib diisi" }, { status: 400 });
+    }
+    const dir = path.join(UPLOADS_DIR, id);
+    // pengaman: hanya hapus folder di dalam UPLOADS_DIR dengan nama id polos
+    if (path.dirname(dir) !== UPLOADS_DIR || id.startsWith(".")) {
+      return NextResponse.json({ error: "id tidak valid" }, { status: 400 });
+    }
+    await fs.rm(dir, { recursive: true, force: true });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ ok: false }, { status: 200 });
+  }
+}
